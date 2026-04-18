@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import App from './App'
+import AppErrorBoundary from './components/AppErrorBoundary'
 import { ThemeProvider } from './context/ThemeContext'
 import { AuthProvider } from './context/AuthContext'
 import { LanguageProvider } from './context/LanguageContext'
@@ -15,8 +16,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <LanguageProvider>
         <ThemeProvider>
           <AuthProvider>
-            <App />
-            <Toaster position="top-right" />
+            <AppErrorBoundary>
+              <App />
+              <Toaster position="top-right" />
+            </AppErrorBoundary>
           </AuthProvider>
         </ThemeProvider>
       </LanguageProvider>
