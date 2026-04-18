@@ -3,7 +3,17 @@ const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const cloudinary          = require('../config/cloudinary');
 
 // ─── Allowed MIME types ────────────────────────────────────────────────────
-const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const ALLOWED_IMAGE_TYPES = [
+  'image/jpeg',
+  'image/jpg',
+  'image/pjpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/heic',
+  'image/heif',
+  'image/avif',
+];
 const ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime'];
 const ALLOWED_DOC_TYPES   = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 
@@ -95,7 +105,7 @@ const selfieStorage = new CloudinaryStorage({
   cloudinary,
   params: async (req) => ({
     folder: 'crime-reporting/verification-selfies',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'avif'],
     resource_type: 'image',
     transformation: [{ quality: 'auto', fetch_format: 'auto' }],
     tags: [`user_${req.user?._id}`],
@@ -105,7 +115,7 @@ const selfieStorage = new CloudinaryStorage({
 
 const uploadSelfie = multer({
   storage: selfieStorage,
-  limits: { fileSize: MAX_DOC_SIZE, files: 1 },
+  limits: { fileSize: MAX_IMAGE_SIZE, files: 1 },
   fileFilter: buildFileFilter(ALLOWED_IMAGE_TYPES),
 }).single('selfie');
 

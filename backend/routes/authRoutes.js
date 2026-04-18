@@ -50,7 +50,7 @@ router.post(
 router.post(
   '/upload-selfie',
   uploadLimiter,
-  ensureGovernmentIdUploadConfigured,
+  ensureCloudinaryUploadConfigured,
   handleUpload(uploadSelfieMiddleware),
   uploadVerificationSelfie
 );
