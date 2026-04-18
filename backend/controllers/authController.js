@@ -1,8 +1,9 @@
 const User = require('../models/User');
 const mongoose = require('mongoose');
-const { encrypt } = require('../utils/encryption');
+const { encrypt, decrypt } = require('../utils/encryption');
 const cloudinary  = require('../config/cloudinary');
 const { recordAuditLog } = require('../services/auditService');
+const { submitIdentityVerification } = require('../services/kycVerificationService');
 const {
   signToken,
   buildAuthCookieOptions,
@@ -46,6 +47,65 @@ const computePendingVerificationStatus = (userDocLike) => {
   // Verification can only move to pending review after both artifacts are present
   if (hasGovernmentId && hasSelfie) return 'pending';
   return 'none';
+};
+
+const applyProviderVerificationIfReady = async ({ req, user, idCardNumber, governmentIdUrl, selfieUrl }) => {
+  if (!user || user.idVerificationStatus !== 'pending') {
+    return { user, providerResult: null };
+  }
+
+  if (!idCardNumber || !governmentIdUrl || !selfieUrl) {
+    return { user, providerResult: null };
+  }
+
+  const providerResult = await submitIdentityVerification({
+    user,
+    idCardType: user.idCardType,
+    idCardNumber,
+    governmentIdUrl,
+    selfieUrl,
+  });
+
+  const update = {
+    verificationProvider: providerResult.provider || 'dojah',
+    verificationProviderStatus: providerResult.providerStatus || null,
+    verificationReference: providerResult.reference || null,
+    verificationLastCheckedAt: new Date(),
+    verificationDecisionSource: providerResult.attempted ? 'provider' : 'system',
+    verificationError: providerResult.reason || null,
+  };
+
+  if (providerResult.idVerificationStatus && ['pending', 'verified', 'rejected'].includes(providerResult.idVerificationStatus)) {
+    update.idVerificationStatus = providerResult.idVerificationStatus;
+    update.isVerified = providerResult.idVerificationStatus === 'verified';
+
+    if (providerResult.idVerificationStatus === 'rejected') {
+      update.idRejectionReason = providerResult.reason || 'Verification rejected by provider.';
+    } else {
+      update.idRejectionReason = null;
+    }
+  }
+
+  const updatedUser = await User.findByIdAndUpdate(user._id, update, { new: true });
+
+  await recordAuditLog({
+    req,
+    actor: req.user._id,
+    actorRole: req.user.role,
+    action: 'identity_provider_verification_attempted',
+    entityType: 'user',
+    entityId: req.user._id,
+    metadata: {
+      provider: providerResult.provider,
+      attempted: providerResult.attempted,
+      providerStatus: providerResult.providerStatus,
+      idVerificationStatus: updatedUser?.idVerificationStatus,
+      reference: providerResult.reference || null,
+      httpStatus: providerResult.httpStatus || null,
+    },
+  });
+
+  return { user: updatedUser, providerResult };
 };
 
 // ─── Helper: send token in response ──────────────────────────────────────
@@ -297,7 +357,7 @@ const uploadGovernmentId = async (req, res) => {
       selfieUrl: existingUser?.selfieUrl,
     });
 
-    const user = await User.findByIdAndUpdate(
+    let user = await User.findByIdAndUpdate(
       req.user._id,
       {
         idDocument:               encryptedUrl,
@@ -311,6 +371,24 @@ const uploadGovernmentId = async (req, res) => {
       },
       { new: true }
     );
+
+    if (user.idVerificationStatus === 'pending') {
+      let selfieUrlForProvider = null;
+      try {
+        selfieUrlForProvider = existingUser?.selfieUrl ? decrypt(existingUser.selfieUrl) : null;
+      } catch {
+        selfieUrlForProvider = null;
+      }
+
+      const providerApplied = await applyProviderVerificationIfReady({
+        req,
+        user,
+        idCardNumber: idNumberCheck.sanitized,
+        governmentIdUrl: req.file.path,
+        selfieUrl: selfieUrlForProvider,
+      });
+      user = providerApplied.user || user;
+    }
 
     await recordAuditLog({
       req,
@@ -367,7 +445,7 @@ const uploadVerificationSelfie = async (req, res) => {
       selfieUrl: encryptedSelfieUrl,
     });
 
-    const user = await User.findByIdAndUpdate(
+    let user = await User.findByIdAndUpdate(
       req.user._id,
       {
         selfieUrl: encryptedSelfieUrl,
@@ -379,6 +457,32 @@ const uploadVerificationSelfie = async (req, res) => {
       },
       { new: true }
     );
+
+    if (user.idVerificationStatus === 'pending') {
+      let idCardNumberForProvider = null;
+      let governmentIdUrlForProvider = null;
+
+      try {
+        idCardNumberForProvider = existingUser?.governmentIdNumber ? decrypt(existingUser.governmentIdNumber) : null;
+      } catch {
+        idCardNumberForProvider = null;
+      }
+
+      try {
+        governmentIdUrlForProvider = existingUser?.governmentIdUrl ? decrypt(existingUser.governmentIdUrl) : null;
+      } catch {
+        governmentIdUrlForProvider = null;
+      }
+
+      const providerApplied = await applyProviderVerificationIfReady({
+        req,
+        user,
+        idCardNumber: idCardNumberForProvider,
+        governmentIdUrl: governmentIdUrlForProvider,
+        selfieUrl: req.file.path,
+      });
+      user = providerApplied.user || user;
+    }
 
     await recordAuditLog({
       req,

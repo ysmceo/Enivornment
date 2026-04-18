@@ -340,9 +340,15 @@ const getIdentityReviewAssets = async (req, res) => {
       assets: {
         governmentIdUrl,
         selfieUrl,
+        profilePhoto: user.profilePhoto || null,
         idCardType: user.idCardType || null,
         governmentIdNumberLast4: user.governmentIdNumberLast4 || null,
         selfieUploadedAt: user.selfieUploadedAt || null,
+        verificationProvider: user.verificationProvider || null,
+        verificationProviderStatus: user.verificationProviderStatus || null,
+        verificationReference: user.verificationReference || null,
+        verificationLastCheckedAt: user.verificationLastCheckedAt || null,
+        verificationError: user.verificationError || null,
       },
     });
   } catch (err) {
@@ -378,6 +384,8 @@ const verifyGovernmentId = async (req, res) => {
     user.idVerificationStatus = action === 'approve' ? 'verified' : 'rejected';
     user.isVerified           = action === 'approve';
     user.idRejectionReason    = action === 'reject' ? (rejectionReason || 'ID rejected.') : null;
+    user.verificationDecisionSource = 'admin';
+    user.verificationLastCheckedAt = new Date();
     await user.save({ validateBeforeSave: false });
 
     await recordAuditLog({

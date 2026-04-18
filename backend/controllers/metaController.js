@@ -34,6 +34,10 @@ const getConfigHealth = async (_req, res) => {
 
   const googleServerKey = process.env.GOOGLE_MAPS_API_KEY;
   const jwtSecret = process.env.JWT_SECRET;
+  const dojahConfig = {
+    appId: process.env.DOJAH_APP_ID,
+    apiKey: process.env.DOJAH_API_KEY,
+  };
 
   res.status(200).json({
     success: true,
@@ -50,6 +54,10 @@ const getConfigHealth = async (_req, res) => {
       },
       auth: {
         jwtConfigured: !isPlaceholderValue(jwtSecret),
+      },
+      kycProvider: {
+        provider: 'dojah',
+        configured: !Object.values(dojahConfig).some((value) => isPlaceholderValue(value)),
       },
     },
   });

@@ -112,6 +112,14 @@ export default function AdminVerification() {
             <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 text-sm space-y-1">
               <p><span className="font-semibold">ID type:</span> {identityAssets?.idCardType || 'Not provided'}</p>
               <p><span className="font-semibold">ID number (last 4):</span> {identityAssets?.governmentIdNumberLast4 || 'Not available'}</p>
+              <p><span className="font-semibold">Provider:</span> {identityAssets?.verificationProvider || 'Not configured'}</p>
+              <p><span className="font-semibold">Provider status:</span> {identityAssets?.verificationProviderStatus || 'N/A'}</p>
+              {identityAssets?.verificationReference && (
+                <p><span className="font-semibold">Reference:</span> {identityAssets.verificationReference}</p>
+              )}
+              {identityAssets?.verificationError && (
+                <p className="text-amber-600 dark:text-amber-400"><span className="font-semibold">Provider note:</span> {identityAssets.verificationError}</p>
+              )}
             </div>
 
             <div className="space-y-2">

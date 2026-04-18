@@ -94,6 +94,37 @@ const userSchema = new mongoose.Schema(
       default: 'none',
     },
 
+    verificationProvider: {
+      type: String,
+      default: null,
+    },
+
+    verificationProviderStatus: {
+      type: String,
+      default: null,
+    },
+
+    verificationReference: {
+      type: String,
+      default: null,
+    },
+
+    verificationLastCheckedAt: {
+      type: Date,
+      default: null,
+    },
+
+    verificationDecisionSource: {
+      type: String,
+      enum: ['system', 'provider', 'admin'],
+      default: 'system',
+    },
+
+    verificationError: {
+      type: String,
+      default: null,
+    },
+
     idRejectionReason: {
       type: String,
       default: null,
