@@ -5,6 +5,7 @@ import { AlertTriangle, MapPin } from 'lucide-react'
 import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet'
 import { useAuth } from '../context/AuthContext'
 import { useLanguage } from '../context/LanguageContext'
+import { authService } from '../services/authService'
 import { reportService } from '../services/reportService'
 import { platformService } from '../services/platformService'
 import { enqueueOfflineReport, getOfflineQueue, syncOfflineReports } from '../services/offlineReportQueue'
@@ -72,7 +73,7 @@ const FORM_STEPS = [
 ]
 
 export default function CitizenDashboard() {
-  const { user, logout } = useAuth()
+  const { user, logout, refreshUser } = useAuth()
   const { t } = useLanguage()
   const [meta, setMeta] = useState({ states: [], incidentCategories: [] })
   const [reports, setReports] = useState([])
@@ -90,6 +91,9 @@ export default function CitizenDashboard() {
   const [queuedCount, setQueuedCount] = useState(() => getOfflineQueue()?.length || 0)
   const [configHealth, setConfigHealth] = useState(null)
   const [formStep, setFormStep] = useState(1)
+  const [verificationIdNumber, setVerificationIdNumber] = useState('')
+  const [verificationFile, setVerificationFile] = useState(null)
+  const [uploadingVerification, setUploadingVerification] = useState(false)
   const syncInProgressRef = useRef(false)
 
   const previewLat = Number(form.lat)
@@ -392,6 +396,33 @@ export default function CitizenDashboard() {
     await submitReport()
   }
 
+  const uploadVerificationId = async (e) => {
+    e.preventDefault()
+
+    if (!verificationIdNumber.trim()) {
+      toast.error('Please enter your ID card number')
+      return
+    }
+
+    if (!verificationFile) {
+      toast.error('Please choose your government ID file')
+      return
+    }
+
+    try {
+      setUploadingVerification(true)
+      await authService.uploadGovernmentId(verificationFile, verificationIdNumber.trim())
+      await refreshUser()
+      setVerificationFile(null)
+      setVerificationIdNumber('')
+      toast.success('Government ID uploaded successfully. Verification is now pending admin review.')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to upload government ID')
+    } finally {
+      setUploadingVerification(false)
+    }
+  }
+
   const submitReport = async () => {
     try {
       const incidentDate = new Date(form.incidentDate)
@@ -529,6 +560,40 @@ export default function CitizenDashboard() {
             <Badge status={configHealth?.cloudinary?.configured ? 'configured' : 'unconfigured'} label="Cloudinary Upload" dot />
             <Badge status={isUsableGoogleMapsKey(GOOGLE_MAPS_API_KEY) ? 'configured' : 'fallback'} label="Browser Maps Key" dot />
           </div>
+        </section>
+      )}
+
+      {user?.idVerificationStatus !== 'verified' && (
+        <section className="card p-4 space-y-3 border border-amber-300/70 dark:border-amber-700/60 bg-amber-50/60 dark:bg-amber-900/20">
+          <h3 className="font-semibold text-amber-800 dark:text-amber-300">Identity verification required</h3>
+          <p className="text-sm text-slate-700 dark:text-slate-300">
+            You must upload a valid government ID and wait for admin approval before submitting incident reports.
+            Current status: <span className="font-semibold capitalize">{user?.idVerificationStatus || 'none'}</span>
+          </p>
+
+          <form onSubmit={uploadVerificationId} className="grid md:grid-cols-3 gap-3 items-end">
+            <div>
+              <label className="label">ID card number</label>
+              <input
+                className="input"
+                value={verificationIdNumber}
+                onChange={(e) => setVerificationIdNumber(e.target.value)}
+                placeholder="Enter your ID number"
+              />
+            </div>
+            <div>
+              <label className="label">Government ID file</label>
+              <input
+                className="input"
+                type="file"
+                accept="image/*,.pdf"
+                onChange={(e) => setVerificationFile(e.target.files?.[0] || null)}
+              />
+            </div>
+            <button type="submit" className="btn-primary" disabled={uploadingVerification}>
+              {uploadingVerification ? 'Uploading…' : 'Upload ID for Verification'}
+            </button>
+          </form>
         </section>
       )}
 
