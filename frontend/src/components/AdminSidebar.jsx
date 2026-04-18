@@ -17,7 +17,7 @@ const NAV_ITEMS = [
   { label: 'Reports', icon: FileText, to: '/admin/reports' },
   { label: 'Users', icon: Users, to: '/admin/users' },
   { label: 'ID Verification', icon: BadgeCheck, to: '/admin/verification' },
-  { label: 'Emergency Directory', icon: Phone, to: '/emergency' },
+  { label: 'Emergency Directory', icon: Phone, to: '/admin/emergency-contacts' },
   { label: 'Live Monitor', icon: Video, to: '/admin/live' },
 ]
 
