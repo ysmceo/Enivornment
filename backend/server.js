@@ -93,6 +93,7 @@ const io = new Server(server, {
 registerSignalingHandlers(io);
 require('./socket/socketHandler')(io); // Chat/SOS real-time
 app.set('io', io);
+global.__io = io;
 
 // ─── Start server ──────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5001;

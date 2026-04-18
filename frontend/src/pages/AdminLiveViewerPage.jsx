@@ -1,12 +1,15 @@
 ﻿import { useCallback, useEffect, useRef, useState } from 'react'
 import { io } from 'socket.io-client'
 import { useAuth } from '../context/AuthContext'
+import { useParams } from 'react-router-dom'
 
 const SIGNALING_URL = import.meta.env.VITE_SOCKET_URL || `${window.location.protocol}//${window.location.hostname}:${import.meta.env.VITE_API_PORT || '5001'}`
 
 export default function AdminLiveViewerPage() {
   const { token } = useAuth()
-  const [roomId, setRoomId] = useState('')
+  const { streamId } = useParams()
+
+  const [roomId, setRoomId] = useState(streamId || '')
   const [inSession, setInSession] = useState(false)
   const [status, setStatus] = useState('Idle')
   const [error, setError] = useState('')
@@ -25,7 +28,7 @@ export default function AdminLiveViewerPage() {
     setStatus('Session ended')
   }, [])
 
-  const joinSession = useCallback(async () => {
+  const joinSession = useCallback(() => {
     if (!roomId.trim()) {
       setError('Room ID is required')
       return

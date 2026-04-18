@@ -3,6 +3,7 @@ import { Shield, Menu, X, Bell, LogOut, User, Moon, Sun, Video } from 'lucide-re
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
 import { useSocket } from '../hooks/useSocket';
 import toast from 'react-hot-toast';
 
@@ -14,6 +15,7 @@ import toast from 'react-hot-toast';
 export default function Navbar() {
   const { user, isAdmin, logout } = useAuth();
   const { isDark, toggle }         = useTheme();
+  const { language, setLanguage, supportedLanguages, t } = useLanguage();
   const { on }                     = useSocket();
   const navigate                   = useNavigate();
   const { pathname }               = useLocation();
@@ -90,6 +92,19 @@ export default function Navbar() {
 
           {/* Right actions */}
           <div className="flex items-center gap-2">
+            <label className="sr-only" htmlFor="language-switcher">{t('languageLabel', 'Language')}</label>
+            <select
+              id="language-switcher"
+              className="hidden sm:block text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5"
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+              aria-label={t('languageLabel', 'Language')}
+            >
+              {supportedLanguages.map((option) => (
+                <option key={option.code} value={option.code}>{option.label}</option>
+              ))}
+            </select>
+
             {/* Theme toggle */}
             <button
               onClick={toggle}

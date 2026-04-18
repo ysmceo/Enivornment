@@ -5,7 +5,7 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const frontendPort = Number(env.FRONTEND_PORT || env.VITE_PORT || 5175);
-  const backendTarget = env.VITE_API_TARGET || env.API_URL || 'http://localhost:5001';
+  const backendTarget = env.VITE_API_TARGET || env.API_URL || 'http://localhost:5182';
 
   return {
     plugins: [react()],
@@ -36,6 +36,20 @@ export default defineConfig(({ mode }) => {
     define: {
       // Required by simple-peer (uses global)
       global: 'globalThis',
+    },
+    build: {
+      chunkSizeWarningLimit: 700,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return;
+
+            if (id.includes('socket.io-client') || id.includes('simple-peer')) {
+              return 'realtime-vendor';
+            }
+          },
+        },
+      },
     },
   };
 });

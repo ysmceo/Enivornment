@@ -1,8 +1,43 @@
 const Notification = require('../models/Notification');
 const { createAuditLog } = require('./auditService');
-const admin = require('firebase-admin'); // FCM
-const twilio = require('twilio'); // SMS
-const nodemailer = require('nodemailer'); // Email
+
+const resolveUserIds = (recipients = []) =>
+  recipients
+    .map((r) => (typeof r === 'string' ? r : r?._id || r?.id || null))
+    .filter(Boolean);
+
+const loadOptionalModule = (moduleName) => {
+  try {
+    // eslint-disable-next-line global-require, import/no-dynamic-require
+    return require(moduleName);
+  } catch {
+    return null;
+  }
+};
+
+const queueNotification = async ({
+  userId = null,
+  reportId = null,
+  channel = 'in_app',
+  type = 'system',
+  title,
+  message,
+  payload = {},
+}) => {
+  const notification = await Notification.create({
+    userId,
+    reportId,
+    type,
+    title,
+    message,
+    payload,
+    channel,
+    status: 'queued',
+  });
+
+  dispatchMultiChannel(notification).catch(console.error);
+  return notification;
+};
 
 const notifyHighPriorityIncident = async ({ req, report, recipients = [] }) => {
   const payload = {
@@ -87,46 +122,103 @@ const sendViaChannel = async (channel, notification, recipients) => {
 
 // ─── FCM Push (Firebase) ──────────────────────────────────────────────────
 const sendFCM = async (notification, recipients) => {
+  const admin = loadOptionalModule('firebase-admin');
+  if (!admin) {
+    console.warn('[Notifications] firebase-admin not installed; skipping push notifications.');
+    return;
+  }
+
+  const serviceAccountRaw = process.env.FCM_SERVICE_ACCOUNT;
+  if (!serviceAccountRaw) {
+    console.warn('[Notifications] FCM_SERVICE_ACCOUNT not set; skipping push notifications.');
+    return;
+  }
+
   if (!admin.apps.length) {
     admin.initializeApp({
-      credential: admin.credential.cert(JSON.parse(process.env.FCM_SERVICE_ACCOUNT || '{}')),
+      credential: admin.credential.cert(JSON.parse(serviceAccountRaw)),
     });
   }
 
-  const messages = recipients.map(userId => ({
-    token: `USER_FCM_TOKEN_${userId}`, // From User.fcmToken
+  const targetUserIds = resolveUserIds(recipients);
+  const messages = targetUserIds.map((userId) => ({
+    token: `USER_FCM_TOKEN_${userId}`,
     notification: {
       title: notification.title,
       body: notification.message,
     },
-    data: notification.payload,
+    data: {
+      reportId: String(notification.payload?.reportId || ''),
+      severity: String(notification.payload?.severity || ''),
+      category: String(notification.payload?.category || ''),
+    },
   }));
+
+  if (!messages.length) return;
 
   await admin.messaging().sendEach(messages);
 };
 
 // ─── SMS (Twilio) ─────────────────────────────────────────────────────────
 const sendSMS = async (notification, recipients) => {
+  const twilio = loadOptionalModule('twilio');
+  if (!twilio) {
+    console.warn('[Notifications] twilio not installed; skipping SMS notifications.');
+    return;
+  }
+
+  if (!process.env.TWILIO_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_PHONE) {
+    console.warn('[Notifications] Twilio env vars missing; skipping SMS notifications.');
+    return;
+  }
+
   const client = twilio(process.env.TWILIO_SID, process.env.TWILIO_AUTH_TOKEN);
-  await client.messages.create({
-    body: `${notification.title}: ${notification.message}`,
-    from: process.env.TWILIO_PHONE,
-    to: recipients.map(r => `+${r.phone}`), // Batch if supported
-  });
+
+  const phoneTargets = recipients
+    .map((r) => (typeof r === 'object' ? r.phone : null))
+    .filter(Boolean)
+    .map((phone) => (String(phone).startsWith('+') ? phone : `+${phone}`));
+
+  await Promise.all(
+    phoneTargets.map((phone) =>
+      client.messages.create({
+        body: `${notification.title}: ${notification.message}`,
+        from: process.env.TWILIO_PHONE,
+        to: phone,
+      })
+    )
+  );
 };
 
 // ─── Email (Nodemailer) ───────────────────────────────────────────────────
 const sendEmail = async (notification, recipients) => {
+  const nodemailer = loadOptionalModule('nodemailer');
+  if (!nodemailer) {
+    console.warn('[Notifications] nodemailer not installed; skipping email notifications.');
+    return;
+  }
+
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.warn('[Notifications] Email env vars missing; skipping email notifications.');
+    return;
+  }
+
   const transporter = nodemailer.createTransport({
-    service: 'gmail', // or process.env.SMTP_*
+    service: process.env.EMAIL_SERVICE || 'gmail',
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS,
     },
   });
 
+  const emailTargets = recipients
+    .map((r) => (typeof r === 'object' ? r.email : null))
+    .filter(Boolean);
+
+  if (!emailTargets.length) return;
+
   await transporter.sendMail({
-    to: recipients.map(r => r.email),
+    to: emailTargets,
     subject: notification.title,
     html: `<p>${notification.message}</p><pre>${JSON.stringify(notification.payload, null, 2)}</pre>`,
   });
@@ -134,16 +226,22 @@ const sendEmail = async (notification, recipients) => {
 
 // ─── In-app (Socket.io) ───────────────────────────────────────────────────
 const sendInApp = (notification) => {
-  // Emit via global io instance (inject in server.js)
-  const io = require('../../server').io;
-  io.emit('global_notification', notification);
-};
+  const io = global.__io;
+  if (!io) return;
 
-const sendHighPriorityIncidentAlerts = notifyHighPriorityIncident;
+  io.emit('global_notification', {
+    _id: notification._id,
+    title: notification.title,
+    message: notification.message,
+    payload: notification.payload,
+    createdAt: notification.createdAt,
+  });
+};
 
 module.exports = {
   notifyHighPriorityIncident,
   sendHighPriorityIncidentAlerts,
+  queueNotification,
   dispatchMultiChannel,
 };
 

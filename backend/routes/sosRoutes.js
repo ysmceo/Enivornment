@@ -2,8 +2,8 @@ const express = require('express');
 const { body, param, validationResult } = require('express-validator');
 const router = express.Router({ mergeParams: true });
 
-const { protect, adminAuth } = require('../middleware/auth');
-const { validate } = require('../middleware/validate');
+const { protect, requireAdmin } = require('../middleware/auth');
+const validate = require('../middleware/validate');
 const {
   createSOSAlert,
   updateSOSLocation,
@@ -62,7 +62,7 @@ router.put(
 router.get(
   '/active',
   protect,
-  adminAuth,
+  requireAdmin,
   validate,
   getActiveSOSAlerts
 );
@@ -71,7 +71,7 @@ router.get(
 router.post(
   '/:alertId/acknowledge',
   protect,
-  adminAuth,
+  requireAdmin,
   validateSOSId,
   validate,
   acknowledgeSOSAlert
@@ -81,7 +81,7 @@ router.post(
 router.post(
   '/:alertId/resolve',
   protect,
-  adminAuth,
+  requireAdmin,
   validateSOSId,
   body('cancelled').optional().isBoolean(),
   validate,

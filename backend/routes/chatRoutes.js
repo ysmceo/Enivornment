@@ -2,8 +2,8 @@ const express = require('express');
 const { body, param, validationResult } = require('express-validator');
 const router = express.Router({ mergeParams: true });
 
-const { protect, adminAuth } = require('../middleware/auth');
-const { validate } = require('../middleware/validate');
+const { protect, requireAdmin } = require('../middleware/auth');
+const validate = require('../middleware/validate');
 const { createChatMessage, getChatMessages, deleteChatMessage, flagChatMessage } = require('../controllers/chatController');
 
 // ─── Validators ───────────────────────────────────────────────────────────
@@ -57,7 +57,7 @@ router.delete(
 router.post(
   '/:messageId/flag',
   protect,
-  adminAuth,
+  requireAdmin,
   validateFlag,
   validate,
   flagChatMessage

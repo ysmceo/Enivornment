@@ -1,5 +1,11 @@
 const SOSAlert = require('../models/SOSAlert');
-const { createSOS, updateSOSLocation, getActiveSOS, acknowledgeSOS, resolveSOS } = require('../services/sosService');
+const {
+  createSOS,
+  updateSOSLocation: updateSOSLocationService,
+  getActiveSOS,
+  acknowledgeSOS,
+  resolveSOS,
+} = require('../services/sosService');
 
 /**
  * POST /api/sos
@@ -54,7 +60,7 @@ const updateSOSLocation = async (req, res) => {
     const { alertId } = req.params;
     const { latitude, longitude, speed, accuracy } = req.body;
 
-    const alert = await updateSOSLocation(alertId, {
+    const alert = await updateSOSLocationService(alertId, {
       coordinates: {
         type: 'Point',
         coordinates: [parseFloat(longitude), parseFloat(latitude)],

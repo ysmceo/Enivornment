@@ -8,6 +8,7 @@ const contactRoutes = require('./contactRoutes');
 const metaRoutes = require('./metaRoutes');
 const chatRoutes = require('./chatRoutes');
 const sosRoutes = require('./sosRoutes');
+const integrationRoutes = require('./integrationRoutes');
 
 const router = express.Router();
 
@@ -19,5 +20,6 @@ router.use('/emergency-contacts', contactRoutes);
 router.use('/meta', metaRoutes);
 router.use('/chat', chatRoutes);
 router.use('/sos', sosRoutes);
+router.use('/integrations', integrationRoutes);
 
 module.exports = router;

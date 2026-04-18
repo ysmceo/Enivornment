@@ -5,6 +5,7 @@ const cloudinary = require('../config/cloudinary');
 const { decrypt } = require('../utils/encryption');
 const { recordAuditLog } = require('../services/auditService');
 const { queueNotification } = require('../services/notificationService');
+const { upsertLawEnforcementCase } = require('../services/lawEnforcementService');
 
 // ─── DASHBOARD STATS ──────────────────────────────────────────────────────
 /**
@@ -135,6 +136,11 @@ const updateReportStatus = async (req, res) => {
 
     await report.save();
 
+    const integrationSync = await upsertLawEnforcementCase({
+      report,
+      actor: req.user,
+    });
+
     await recordAuditLog({
       req,
       actor: req.user._id,
@@ -142,7 +148,11 @@ const updateReportStatus = async (req, res) => {
       action: 'report_status_updated',
       entityType: 'report',
       entityId: report._id,
-      metadata: { status, priority: priority || report.priority },
+      metadata: {
+        status,
+        priority: priority || report.priority,
+        lawEnforcementSync: integrationSync,
+      },
     });
 
     const notification = await queueNotification({
@@ -165,7 +175,12 @@ const updateReportStatus = async (req, res) => {
       });
     }
 
-    res.status(200).json({ success: true, message: 'Report status updated.', report });
+    res.status(200).json({
+      success: true,
+      message: 'Report status updated.',
+      report,
+      integration: integrationSync,
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error.' });
   }

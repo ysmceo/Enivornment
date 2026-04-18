@@ -4,8 +4,10 @@ import toast from 'react-hot-toast'
 import { AlertTriangle, MapPin, Phone } from 'lucide-react'
 import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet'
 import { useAuth } from '../context/AuthContext'
+import { useLanguage } from '../context/LanguageContext'
 import { reportService } from '../services/reportService'
 import { platformService } from '../services/platformService'
+import { enqueueOfflineReport, getOfflineQueue, syncOfflineReports } from '../services/offlineReportQueue'
 import Badge from '../components/Badge'
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
@@ -47,6 +49,7 @@ const initialForm = {
 
 export default function CitizenDashboard() {
   const { user, logout } = useAuth()
+  const { t } = useLanguage()
   const [meta, setMeta] = useState({ states: [], incidentCategories: [] })
   const [reports, setReports] = useState([])
   const [contacts, setContacts] = useState([])
@@ -60,6 +63,7 @@ export default function CitizenDashboard() {
   const [weather, setWeather] = useState(null)
   const [weatherLoading, setWeatherLoading] = useState(false)
   const [geoResolving, setGeoResolving] = useState(false)
+  const [queuedCount, setQueuedCount] = useState(() => getOfflineQueue().length)
 
   const previewLat = Number(form.lat)
   const previewLng = Number(form.lng)
@@ -326,11 +330,63 @@ export default function CitizenDashboard() {
       await fetchReports()
       await fetchMapData(form.state)
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to submit report')
+      const networkIssue = !navigator.onLine || !err.response
+      if (networkIssue) {
+        if (files.length > 0) {
+          toast.error('Offline queue currently supports text/location data only. Please resubmit media when online.')
+        }
+
+        const queueSize = enqueueOfflineReport({
+          title: form.title,
+          description: form.description,
+          category: form.category,
+          severity: form.severity,
+          state: form.state,
+          incidentDate: new Date(form.incidentDate).toISOString(),
+          'location.address': form.address,
+          'location.coordinates.lat': form.lat || '0',
+          'location.coordinates.lng': form.lng || '0',
+          isAnonymous: String(form.isAnonymous),
+        })
+
+        setQueuedCount(queueSize)
+        toast.success(t('offlineQueued', 'Offline mode: report queued and will auto-sync once connection is restored.'))
+      } else {
+        toast.error(err.response?.data?.message || 'Failed to submit report')
+      }
     } finally {
       setSubmitting(false)
     }
   }
+
+  const syncQueuedReports = async () => {
+    const result = await syncOfflineReports({ createReport: reportService.createReport })
+    setQueuedCount(result.remaining)
+
+    if (result.synced > 0) {
+      toast.success(`Synced ${result.synced} queued report(s)`)
+      await fetchReports()
+      await fetchMapData(form.state)
+    }
+
+    if (result.failed > 0) {
+      toast.error(`${result.failed} queued report(s) still pending`)
+    }
+  }
+
+  useEffect(() => {
+    const handleOnline = () => {
+      syncQueuedReports().catch(() => {})
+    }
+
+    window.addEventListener('online', handleOnline)
+    if (navigator.onLine && getOfflineQueue().length > 0) {
+      syncQueuedReports().catch(() => {})
+    }
+
+    return () => window.removeEventListener('online', handleOnline)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <main className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
@@ -342,10 +398,22 @@ export default function CitizenDashboard() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Link to="/emergency" className="btn-secondary">Emergency Directory</Link>
+          <Link to="/emergency" className="btn-secondary">{t('emergencyDirectory', 'Emergency Directory')}</Link>
           <button onClick={logout} className="btn-danger">Logout</button>
         </div>
       </header>
+
+      {queuedCount > 0 && (
+        <section className="card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-l-4 border-amber-500">
+          <div>
+            <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">{t('queuedReports', 'Queued offline reports')}: {queuedCount}</p>
+            <p className="text-xs text-slate-500">Reports are automatically synced when the connection returns.</p>
+          </div>
+          <button type="button" className="btn-secondary" onClick={syncQueuedReports}>
+            {t('syncNow', 'Sync queued reports now')}
+          </button>
+        </section>
+      )}
 
       {loading ? (
         <div className="card p-6 text-sm text-slate-500">Loading dashboard…</div>
@@ -420,7 +488,7 @@ export default function CitizenDashboard() {
 
           <section className="grid lg:grid-cols-3 gap-6">
             <form onSubmit={submitReport} className="lg:col-span-2 card p-5 space-y-4">
-              <h2 className="text-lg font-semibold">Submit Incident Report</h2>
+              <h2 className="text-lg font-semibold">{t('submitReport', 'Submit Incident Report')}</h2>
 
               <div className="grid sm:grid-cols-2 gap-3">
                 <div>
