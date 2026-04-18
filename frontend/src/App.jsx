@@ -41,7 +41,7 @@ export default function App() {
         <Route
           path="/dashboard"
           element={
-            <ProtectedRoute role="user">
+            <ProtectedRoute role={["user", "authority"]}>
               <CitizenDashboard />
             </ProtectedRoute>
           }
