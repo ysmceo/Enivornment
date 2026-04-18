@@ -473,7 +473,7 @@ export default function CitizenDashboard() {
       files.forEach((file) => payload.append('media', file))
 
       await reportService.createReport(payload)
-      toast.success('Incident report submitted successfully')
+      toast.success('Report submitted — awaiting admin approval.')
 
       setForm((prev) => ({ ...initialForm, state: prev.state }))
       setFormStep(1)
@@ -974,6 +974,9 @@ export default function CitizenDashboard() {
 
           <section className="card p-5">
             <h2 className="text-lg font-semibold mb-3">My Submitted Reports</h2>
+            <p className="text-sm text-slate-500 mb-3">
+              New reports stay in pending review until an admin approves and processes them.
+            </p>
             <div className="space-y-3">
               {reports.length === 0 ? (
                 <p className="text-sm text-slate-500">No reports yet.</p>
@@ -988,6 +991,11 @@ export default function CitizenDashboard() {
                     <p className="text-xs text-slate-500 mt-1">
                       Incident: {report.incidentDate ? new Date(report.incidentDate).toLocaleString() : 'N/A'}
                     </p>
+                    {report.status === 'pending' && (
+                      <p className="text-xs text-indigo-700 dark:text-indigo-300 mt-1 font-medium">
+                        Report submitted — awaiting admin approval.
+                      </p>
+                    )}
                     {report.moderation?.flagged && (
                       <p className="text-xs text-amber-600 mt-1">Moderation review in progress</p>
                     )}
