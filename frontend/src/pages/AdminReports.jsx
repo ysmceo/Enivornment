@@ -160,7 +160,15 @@ export default function AdminReports() {
                       <td className="table-td capitalize">{r.category?.replaceAll('_', ' ')}</td>
                       <td className="table-td capitalize">{r.severity || 'medium'}</td>
                       <td className="table-td">{r.riskScore ?? 0}</td>
-                      <td className="table-td"><Badge status={r.status} dot /></td>
+                      <td className="table-td">
+                        {r.status === 'pending' ? (
+                          <span className="inline-flex items-center rounded-full border border-amber-300 dark:border-amber-700 bg-amber-100 dark:bg-amber-900/30 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800 dark:text-amber-300">
+                            Pending Admin Approval
+                          </span>
+                        ) : (
+                          <Badge status={r.status} dot />
+                        )}
+                      </td>
                       <td className="table-td">
                         <button onClick={() => setSelected(r)} className="btn-secondary text-xs px-3 py-1.5"><Eye className="w-3.5 h-3.5" /> Open</button>
                       </td>
@@ -190,7 +198,13 @@ export default function AdminReports() {
       >
         {selected && (
           <div className="space-y-3">
-            <Badge status={selected.status} dot />
+            {selected.status === 'pending' ? (
+              <span className="inline-flex items-center rounded-full border border-amber-300 dark:border-amber-700 bg-amber-100 dark:bg-amber-900/30 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800 dark:text-amber-300">
+                Pending Admin Approval
+              </span>
+            ) : (
+              <Badge status={selected.status} dot />
+            )}
             <p className="text-xs text-slate-500">
               <span className="font-semibold">Severity:</span> {selected.severity || 'medium'} ·{' '}
               <span className="font-semibold">Risk score:</span> {selected.riskScore ?? 0}
