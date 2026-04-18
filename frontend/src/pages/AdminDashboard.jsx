@@ -28,6 +28,53 @@ const isUsableGoogleMapsKey = (value) => {
   return !placeholderPatterns.some((pattern) => normalized.includes(pattern))
 }
 
+const buildHealthChecks = (configHealth) => {
+  const checks = [
+    {
+      key: 'database',
+      label: 'Database',
+      healthy: Boolean(configHealth?.database?.connected),
+      okStatus: 'active',
+      badStatus: 'degraded',
+      envFile: 'backend/.env',
+      envKeys: ['MONGO_URI'],
+      fix: 'Set a valid MongoDB URI and ensure MongoDB service is running before restarting backend.',
+    },
+    {
+      key: 'cloudinary',
+      label: 'Cloudinary Upload',
+      healthy: Boolean(configHealth?.cloudinary?.configured),
+      okStatus: 'configured',
+      badStatus: 'unconfigured',
+      envFile: 'backend/.env',
+      envKeys: ['CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET'],
+      fix: 'Replace placeholder Cloudinary values with real credentials from your Cloudinary dashboard.',
+    },
+    {
+      key: 'maps',
+      label: 'Browser Maps Key',
+      healthy: isUsableGoogleMapsKey(GOOGLE_MAPS_API_KEY),
+      okStatus: 'configured',
+      badStatus: 'fallback',
+      envFile: 'frontend/.env',
+      envKeys: ['VITE_GOOGLE_MAPS_API_KEY'],
+      fix: 'Set a valid browser Google Maps key, or keep fallback mode to use OpenStreetMap geocoding.',
+    },
+    {
+      key: 'jwt',
+      label: 'JWT Secret',
+      healthy: Boolean(configHealth?.auth?.jwtConfigured),
+      okStatus: 'configured',
+      badStatus: 'unconfigured',
+      envFile: 'backend/.env',
+      envKeys: ['JWT_SECRET'],
+      fix: 'Use a long random JWT secret for secure token signing, then restart backend.',
+    },
+  ]
+
+  return checks
+}
+
 export default function AdminDashboard() {
   const [stats, setStats] = useState(null)
   const [recentReports, setRecentReports] = useState([])
@@ -35,6 +82,9 @@ export default function AdminDashboard() {
   const [mapSummary, setMapSummary] = useState(null)
   const [configHealth, setConfigHealth] = useState(null)
   const [loading, setLoading] = useState(true)
+
+  const healthChecks = buildHealthChecks(configHealth)
+  const failingChecks = healthChecks.filter((item) => !item.healthy)
 
   useEffect(() => {
     const load = async () => {
@@ -82,11 +132,30 @@ export default function AdminDashboard() {
             <section className="card p-4 space-y-2">
               <p className="text-xs uppercase tracking-wide text-slate-500">System Setup Health</p>
               <div className="flex flex-wrap gap-2">
-                <Badge status={configHealth?.database?.connected ? 'active' : 'degraded'} label="Database" dot />
-                <Badge status={configHealth?.cloudinary?.configured ? 'configured' : 'unconfigured'} label="Cloudinary Upload" dot />
-                <Badge status={isUsableGoogleMapsKey(GOOGLE_MAPS_API_KEY) ? 'configured' : 'fallback'} label="Browser Maps Key" dot />
-                <Badge status={configHealth?.auth?.jwtConfigured ? 'configured' : 'unconfigured'} label="JWT Secret" dot />
+                {healthChecks.map((item) => (
+                  <span key={item.key} title={item.healthy ? `${item.label} is healthy` : `${item.label}: ${item.fix}`}>
+                    <Badge status={item.healthy ? item.okStatus : item.badStatus} label={item.label} dot />
+                  </span>
+                ))}
               </div>
+
+              {failingChecks.length > 0 && (
+                <details className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-900/20 p-3">
+                  <summary className="cursor-pointer text-sm font-semibold text-amber-800 dark:text-amber-300">
+                    Fix tips for {failingChecks.length} failing check{failingChecks.length > 1 ? 's' : ''}
+                  </summary>
+                  <div className="mt-3 space-y-3">
+                    {failingChecks.map((item) => (
+                      <div key={`tip-${item.key}`} className="rounded-md border border-amber-200/70 dark:border-amber-800/70 bg-white/70 dark:bg-slate-900/40 p-3">
+                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{item.label}</p>
+                        <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">{item.fix}</p>
+                        <p className="text-xs text-slate-500 mt-1">File: <code>{item.envFile}</code></p>
+                        <p className="text-xs text-slate-500">Keys: <code>{item.envKeys.join(', ')}</code></p>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
             </section>
           )}
 
