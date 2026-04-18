@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { AlertTriangle, MapPin, Phone } from 'lucide-react'
+import { AlertTriangle, MapPin } from 'lucide-react'
 import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet'
 import { useAuth } from '../context/AuthContext'
 import { useLanguage } from '../context/LanguageContext'
@@ -82,6 +82,7 @@ export default function CitizenDashboard() {
   const [geoResolving, setGeoResolving] = useState(false)
   const [queuedCount, setQueuedCount] = useState(() => getOfflineQueue()?.length || 0)
   const [configHealth, setConfigHealth] = useState(null)
+  const syncInProgressRef = useRef(false)
 
   const previewLat = Number(form.lat)
   const previewLng = Number(form.lng)
@@ -380,17 +381,42 @@ export default function CitizenDashboard() {
   }
 
   const syncQueuedReports = async () => {
-    const result = await syncOfflineReports({ createReport: reportService.createReport })
-    setQueuedCount(result.remaining)
+    if (syncInProgressRef.current) return
 
-    if (result.synced > 0) {
-      toast.success(`Synced ${result.synced} queued report(s)`)
-      await fetchReports()
-      await fetchMapData(form.state)
-    }
+    try {
+      syncInProgressRef.current = true
+      const result = await syncOfflineReports({ createReport: reportService.createReport })
+      setQueuedCount(result.remaining)
 
-    if (result.failed > 0) {
-      toast.error(`${result.failed} queued report(s) still pending`)
+      if (result.synced > 0) {
+        toast.success(`Synced ${result.synced} queued report(s)`, { id: 'offline-sync-success' })
+        await fetchReports()
+        await fetchMapData(form.state)
+      }
+
+      if (result.discarded > 0) {
+        toast.error(
+          `${result.discarded} queued report(s) were removed because the data is no longer valid. Please resubmit them.`,
+          { id: 'offline-sync-discarded' }
+        )
+      }
+
+      if (result.unauthorized > 0) {
+        toast.error(
+          'Your session expired. Please sign in again to sync remaining queued reports.',
+          { id: 'offline-sync-unauthorized' }
+        )
+      }
+
+      if (result.failed > 0) {
+        toast.error(`${result.failed} queued report(s) still pending`, { id: 'offline-sync-pending' })
+      } else {
+        toast.dismiss('offline-sync-pending')
+      }
+    } catch {
+      toast.error('Failed to sync queued reports. Will retry automatically when online.', { id: 'offline-sync-error' })
+    } finally {
+      syncInProgressRef.current = false
     }
   }
 
@@ -431,18 +457,6 @@ export default function CitizenDashboard() {
             <Badge status={configHealth?.cloudinary?.configured ? 'configured' : 'unconfigured'} label="Cloudinary Upload" dot />
             <Badge status={isUsableGoogleMapsKey(GOOGLE_MAPS_API_KEY) ? 'configured' : 'fallback'} label="Browser Maps Key" dot />
           </div>
-        </section>
-      )}
-
-      {queuedCount > 0 && (
-        <section className="card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-l-4 border-amber-500">
-          <div>
-            <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">{t('queuedReports', 'Queued offline reports')}: {queuedCount}</p>
-            <p className="text-xs text-slate-500">Reports are automatically synced when the connection returns.</p>
-          </div>
-          <button type="button" className="btn-secondary" onClick={syncQueuedReports}>
-            {t('syncNow', 'Sync queued reports now')}
-          </button>
         </section>
       )}
 
@@ -662,9 +676,7 @@ export default function CitizenDashboard() {
                       <div key={contact._id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-2.5">
                         <p className="text-sm font-semibold">{contact.agencyName}</p>
                         <p className="text-xs text-slate-500 capitalize">{String(contact.type || contact.authorityType || 'other').replace('_', ' ')}</p>
-                        <a className="text-sm text-indigo-600 mt-1 inline-flex items-center gap-1" href={`tel:${contact.phoneNumber}`}>
-                          <Phone className="w-3.5 h-3.5" /> {contact.phoneNumber}
-                        </a>
+                        <p className="text-xs text-slate-500 mt-1">Contact numbers are visible to admins only.</p>
                       </div>
                     ))}
                   </div>

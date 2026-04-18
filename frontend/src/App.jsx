@@ -30,6 +30,8 @@ const AdminVerification = lazyWithReload(() => import('./pages/AdminVerification
 const AdminEmergencyContacts = lazyWithReload(() => import('./pages/AdminEmergencyContacts.jsx'))
 const EmergencyDirectoryPage = lazyWithReload(() => import('./pages/EmergencyDirectoryPageV2'))
 const LiveHomePage = lazyWithReload(() => import('./pages/LiveHomePage.jsx'))
+const LiveStartPage = lazyWithReload(() => import('./pages/LiveStartPage.jsx'))
+const LiveViewerPage = lazyWithReload(() => import('./pages/LiveViewerPage.jsx'))
 const AdminLiveViewerPage = lazyWithReload(() => import('./pages/AdminLiveViewerPage.jsx'))
 const NewsCategoryPage = lazyWithReload(() => import('./pages/NewsCategoryPage.jsx'))
 const NewsReaderPage = lazyWithReload(() => import('./pages/NewsReaderPage.jsx'))
@@ -141,7 +143,15 @@ export default function App() {
               path="/live/start"
               element={
                 <ProtectedRoute role="user" verified>
-                  <LiveHomePage />
+                  <LiveStartPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/live/:streamId"
+              element={
+                <ProtectedRoute>
+                  <LiveViewerPage />
                 </ProtectedRoute>
               }
             />

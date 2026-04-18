@@ -131,6 +131,26 @@ const normalizeContactOutput = (contact = {}) => {
   };
 };
 
+const redactPhoneFields = (entry = {}) => {
+  const {
+    phonePrimary: _phonePrimary,
+    phoneSecondary: _phoneSecondary,
+    phoneNumber: _phoneNumber,
+    alternatePhone: _alternatePhone,
+    phoneNumbers: _phoneNumbers,
+    ...rest
+  } = entry;
+
+  return {
+    ...rest,
+    phonePrimary: null,
+    phoneSecondary: null,
+    phoneNumber: null,
+    alternatePhone: null,
+    phoneNumbers: [],
+  };
+};
+
 const matchesSearch = (entry, searchLower) => {
   if (!searchLower) return true;
   const haystack = [
@@ -335,17 +355,21 @@ const getEmergencyDirectory = async (req, res) => {
       .map((state) => {
         const items = allEntries.filter((entry) => entry.state === state);
         if (!items.length) return null;
-        return { state, region: STATE_TO_REGION[state] || 'North Central', contacts: items };
+        return {
+          state,
+          region: STATE_TO_REGION[state] || 'North Central',
+          contacts: items.map((item) => redactPhoneFields(item)),
+        };
       })
       .filter(Boolean);
 
     const suggestions = [...new Set(
-      allEntries.flatMap((entry) => [entry.name, entry.agency, ...(entry.phoneNumbers || [])]).filter(Boolean).map(String)
+      allEntries.flatMap((entry) => [entry.name, entry.agency]).filter(Boolean).map(String)
     )].slice(0, 20);
 
     res.status(200).json({
       success: true,
-      contacts: allEntries,
+      contacts: allEntries.map((entry) => redactPhoneFields(entry)),
       groupedByState,
       states: NIGERIA_STATES,
       regions: NIGERIA_REGIONS,
@@ -411,7 +435,13 @@ const getNearbyAuthorities = async (req, res) => {
       .sort((a, b) => a.distanceKm - b.distanceKm)
       .slice(0, limit);
 
-    res.status(200).json({ success: true, nearby, detectedState, query: { lat, lng, radiusKm, limit }, total: nearby.length });
+    res.status(200).json({
+      success: true,
+      nearby: nearby.map((entry) => redactPhoneFields(entry)),
+      detectedState,
+      query: { lat, lng, radiusKm, limit },
+      total: nearby.length,
+    });
   } catch (_error) {
     res.status(500).json({ success: false, message: 'Server error finding nearby authorities.' });
   }

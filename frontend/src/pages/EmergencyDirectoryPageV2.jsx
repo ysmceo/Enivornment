@@ -3,10 +3,12 @@ import toast from 'react-hot-toast'
 import { LocateFixed, Phone } from 'lucide-react'
 import { platformService } from '../services/platformService'
 import { useLanguage } from '../context/LanguageContext'
+import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../hooks/useSocket'
 
 export default function EmergencyDirectoryPageV2() {
   const { t } = useLanguage()
+  const { isAdmin } = useAuth()
   const { on } = useSocket()
   const [states, setStates] = useState([])
   const [regions, setRegions] = useState([])
@@ -185,7 +187,11 @@ export default function EmergencyDirectoryPageV2() {
           )}
         </div>
 
-        <p className="text-xs text-slate-500">{t('quickDialHint', 'Auto-suggest is enabled. Tap any number for one-click calling.')}</p>
+        <p className="text-xs text-slate-500">
+          {isAdmin
+            ? t('quickDialHint', 'Auto-suggest is enabled. Tap any number for one-click calling.')
+            : 'Authority phone numbers are restricted to admin accounts.'}
+        </p>
         {detectedState && <p className="text-xs text-slate-500">{t('nearbyFirst', 'Nearby authorities are prioritized first')}</p>}
 
         {loading ? (
@@ -206,18 +212,22 @@ export default function EmergencyDirectoryPageV2() {
                     <div key={contact._id} className="border border-slate-200 dark:border-slate-700 rounded-xl p-4">
                       <p className="font-semibold">{contact.name || contact.agency}</p>
                       <p className="text-xs text-slate-500 mt-0.5 capitalize">{authorityLabel(contact.authorityType || 'other')}</p>
-                      {(contact.phoneNumbers || []).length > 0 ? (
-                        <div className="mt-2 space-y-1">
-                          {contact.phoneNumbers.map((phone) => (
-                            <a key={`${contact._id}-${phone}`} className="inline-flex items-center gap-1 text-indigo-600" href={`tel:${phone}`}>
-                              <Phone className="w-4 h-4" /> {phone}
-                            </a>
-                          ))}
-                        </div>
+                      {isAdmin ? (
+                        (contact.phoneNumbers || []).length > 0 ? (
+                          <div className="mt-2 space-y-1">
+                            {contact.phoneNumbers.map((phone) => (
+                              <a key={`${contact._id}-${phone}`} className="inline-flex items-center gap-1 text-indigo-600" href={`tel:${phone}`}>
+                                <Phone className="w-4 h-4" /> {phone}
+                              </a>
+                            ))}
+                          </div>
+                        ) : (
+                          <a className="inline-flex items-center gap-1 text-indigo-600 mt-2" href={`tel:${contact.phonePrimary || contact.phoneNumber}`}>
+                            <Phone className="w-4 h-4" /> {contact.phonePrimary || contact.phoneNumber}
+                          </a>
+                        )
                       ) : (
-                        <a className="inline-flex items-center gap-1 text-indigo-600 mt-2" href={`tel:${contact.phonePrimary || contact.phoneNumber}`}>
-                          <Phone className="w-4 h-4" /> {contact.phonePrimary || contact.phoneNumber}
-                        </a>
+                        <p className="text-xs text-slate-500 mt-2">Contact numbers are visible to admins only.</p>
                       )}
                     </div>
                   ))}

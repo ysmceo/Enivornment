@@ -41,16 +41,52 @@ const formDataFromPayload = (payload) => {
 
 export const syncOfflineReports = async ({ createReport }) => {
   const queue = getOfflineQueue()
-  if (!queue.length) return { synced: 0, failed: 0, remaining: 0 }
+  if (!queue.length) {
+    return {
+      synced: 0,
+      failed: 0,
+      remaining: 0,
+      discarded: 0,
+      unauthorized: 0,
+    }
+  }
 
   const remaining = []
   let synced = 0
+  let discarded = 0
+  let unauthorized = 0
 
   for (const item of queue) {
     try {
       await createReport(formDataFromPayload(item.payload))
       synced += 1
-    } catch {
+    } catch (error) {
+      const status = error?.response?.status
+
+      if (!status) {
+        // Network/offline or timeout -> retry later
+        remaining.push(item)
+        continue
+      }
+
+      if (status === 401) {
+        unauthorized += 1
+        remaining.push(item)
+        continue
+      }
+
+      if (status === 429 || status >= 500) {
+        // Rate-limit/server instability -> retry later
+        remaining.push(item)
+        continue
+      }
+
+      if (status >= 400 && status < 500) {
+        // Invalid payload/permissions/etc. -> do not keep permanently stuck in queue
+        discarded += 1
+        continue
+      }
+
       remaining.push(item)
     }
   }
@@ -60,5 +96,7 @@ export const syncOfflineReports = async ({ createReport }) => {
     synced,
     failed: remaining.length,
     remaining: remaining.length,
+    discarded,
+    unauthorized,
   }
 }

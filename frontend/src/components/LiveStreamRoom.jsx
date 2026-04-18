@@ -25,6 +25,12 @@ export default function LiveStreamRoom({ role = 'viewer', initialRoomId = '' }) 
   const localVideoRef = useRef(null)
   const remoteVideoRef = useRef(null)
 
+  useEffect(() => {
+    if (!inSession && initialRoomId) {
+      setRoomId(initialRoomId)
+    }
+  }, [inSession, initialRoomId])
+
   const closePeers = useCallback(() => {
     peersRef.current.forEach((pc) => pc.close())
     peersRef.current.clear()

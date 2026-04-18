@@ -56,7 +56,7 @@ export default function LiveHomePage() {
             {streams.map((s) => (
               <Link
                 key={s._id}
-                to={`/admin/live/${s.streamId}`}
+                to={`/live/${s.streamId}`}
                 className="card p-4 hover:shadow-md transition-shadow group"
               >
                 <div className="aspect-video bg-slate-800 dark:bg-slate-900 rounded-xl mb-3 flex items-center justify-center">
