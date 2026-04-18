@@ -35,10 +35,27 @@ app.use(
   })
 );
 
-const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5175,http://127.0.0.1:5175')
+const configuredOrigins = (process.env.CLIENT_URL || '')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
+
+const defaultLocalOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:5175',
+  'http://127.0.0.1:5175',
+  'http://localhost:5176',
+  'http://127.0.0.1:5176',
+];
+
+const allowedOrigins = Array.from(
+  new Set(
+    process.env.NODE_ENV === 'production'
+      ? configuredOrigins
+      : [...configuredOrigins, ...defaultLocalOrigins]
+  )
+);
 app.use(
   cors({
     origin: (origin, cb) => {
