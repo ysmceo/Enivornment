@@ -2,6 +2,7 @@ import api from './api'
 
 export const platformService = {
   getMetadata: () => api.get('/meta/metadata'),
+  getConfigHealth: () => api.get('/meta/config-health'),
   getEmergencyContacts: (params) => api.get('/emergency-contacts', { params }),
   getEmergencyContactsByState: (state, params = {}) => api.get(`/emergency-contacts/state/${encodeURIComponent(state)}`, { params }),
   getNearbyEmergencyContacts: (params) => api.get('/emergency-contacts/nearby', { params }),

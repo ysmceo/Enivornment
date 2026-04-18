@@ -11,6 +11,40 @@ const MAX_IMAGE_SIZE = 10 * 1024 * 1024;  // 10 MB
 const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100 MB
 const MAX_DOC_SIZE   = 5  * 1024 * 1024;  // 5 MB
 
+const isPlaceholderValue = (value = '') => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return true;
+  return (
+    normalized.startsWith('replace_') ||
+    normalized.startsWith('your_') ||
+    normalized.includes('replace_me') ||
+    normalized.includes('your_')
+  );
+};
+
+const isCloudinaryConfigured = () => {
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  const apiKey = process.env.CLOUDINARY_API_KEY;
+  const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+  return ![
+    cloudName,
+    apiKey,
+    apiSecret,
+  ].some((item) => isPlaceholderValue(item));
+};
+
+const ensureGovernmentIdUploadConfigured = (req, res, next) => {
+  if (!isCloudinaryConfigured()) {
+    return res.status(503).json({
+      success: false,
+      message: 'Government ID upload is not configured yet (Cloudinary keys are placeholders). Account creation can still continue.',
+    });
+  }
+
+  return next();
+};
+
 // ─── Helper: build a file filter ──────────────────────────────────────────
 const buildFileFilter = (allowedTypes) => (req, file, cb) => {
   if (allowedTypes.includes(file.mimetype)) {
@@ -94,4 +128,9 @@ const handleUpload = (uploadFn) => (req, res, next) => {
   });
 };
 
-module.exports = { uploadGovernmentId, uploadMedia, handleUpload };
+module.exports = {
+  uploadGovernmentId,
+  uploadMedia,
+  handleUpload,
+  ensureGovernmentIdUploadConfigured,
+};

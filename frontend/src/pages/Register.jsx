@@ -76,8 +76,9 @@ export default function Register() {
       await refreshUser()
       toast.success('Account created and ID uploaded for verification')
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Account created, but ID upload failed')
-      return
+      const message = err.response?.data?.message || 'Account created, but ID upload failed'
+      toast.error(message)
+      toast('You can still continue and sign in. Upload can be retried later.', { icon: 'ℹ️' })
     }
 
     navigate('/dashboard')

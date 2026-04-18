@@ -12,6 +12,23 @@ import Badge from '../components/Badge'
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
 
+const isUsableGoogleMapsKey = (value) => {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (!normalized) return false
+
+  const placeholderPatterns = [
+    'replace',
+    'your_',
+    'example',
+    'placeholder',
+    'optional',
+    'dummy',
+    'test',
+  ]
+
+  return !placeholderPatterns.some((pattern) => normalized.includes(pattern))
+}
+
 const WEATHER_CODE_LABELS = {
   0: 'Clear sky',
   1: 'Mainly clear',
@@ -64,6 +81,7 @@ export default function CitizenDashboard() {
   const [weatherLoading, setWeatherLoading] = useState(false)
   const [geoResolving, setGeoResolving] = useState(false)
   const [queuedCount, setQueuedCount] = useState(() => getOfflineQueue().length)
+  const [configHealth, setConfigHealth] = useState(null)
 
   const previewLat = Number(form.lat)
   const previewLng = Number(form.lng)
@@ -92,12 +110,14 @@ export default function CitizenDashboard() {
     const init = async () => {
       try {
         setLoading(true)
-        const [metaRes] = await Promise.all([
+        const [metaRes, healthRes] = await Promise.all([
           platformService.getMetadata(),
+          platformService.getConfigHealth(),
           fetchReports(),
         ])
         const metadata = metaRes.data.metadata
         setMeta(metadata)
+        setConfigHealth(healthRes.data.configHealth || null)
 
         const fallbackState = user?.state || 'FCT'
         setForm((prev) => ({ ...prev, state: fallbackState }))
@@ -173,7 +193,7 @@ export default function CitizenDashboard() {
   const resolveAddressFromCoordinates = async (lat, lng) => {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
 
-    if (GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== 'replace_me_optional') {
+    if (isUsableGoogleMapsKey(GOOGLE_MAPS_API_KEY)) {
       const googleUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${GOOGLE_MAPS_API_KEY}`
       const response = await fetch(googleUrl)
       if (!response.ok) throw new Error('Google geocoding failed')
@@ -193,7 +213,7 @@ export default function CitizenDashboard() {
     if (!address?.trim()) return null
     const query = `${address}, ${state || 'Nigeria'}`
 
-    if (GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== 'replace_me_optional') {
+    if (isUsableGoogleMapsKey(GOOGLE_MAPS_API_KEY)) {
       const googleUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${GOOGLE_MAPS_API_KEY}`
       const response = await fetch(googleUrl)
       if (!response.ok) throw new Error('Google address geocoding failed')
@@ -402,6 +422,17 @@ export default function CitizenDashboard() {
           <button onClick={logout} className="btn-danger">Logout</button>
         </div>
       </header>
+
+      {configHealth && (
+        <section className="card p-4 space-y-2">
+          <p className="text-xs uppercase tracking-wide text-slate-500">System Setup Health</p>
+          <div className="flex flex-wrap gap-2">
+            <Badge status={configHealth?.database?.connected ? 'active' : 'degraded'} label="Database" dot />
+            <Badge status={configHealth?.cloudinary?.configured ? 'configured' : 'unconfigured'} label="Cloudinary Upload" dot />
+            <Badge status={isUsableGoogleMapsKey(GOOGLE_MAPS_API_KEY) ? 'configured' : 'fallback'} label="Browser Maps Key" dot />
+          </div>
+        </section>
+      )}
 
       {queuedCount > 0 && (
         <section className="card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-l-4 border-amber-500">

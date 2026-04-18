@@ -6,7 +6,11 @@ const {
 const { protect }                         = require('../middleware/auth');
 const { authLimiter, uploadLimiter }      = require('../middleware/rateLimiter');
 const validate                            = require('../middleware/validate');
-const { uploadGovernmentId: uploadIdMiddleware, handleUpload } = require('../middleware/upload');
+const {
+  uploadGovernmentId: uploadIdMiddleware,
+  handleUpload,
+  ensureGovernmentIdUploadConfigured,
+} = require('../middleware/upload');
 const {
   registerValidation,
   loginValidation,
@@ -35,6 +39,7 @@ router.put('/change-password', changePasswordValidation, validate, changePasswor
 router.post(
   '/upload-id',
   uploadLimiter,
+  ensureGovernmentIdUploadConfigured,
   handleUpload(uploadIdMiddleware),
   uploadGovernmentId
 );
