@@ -320,6 +320,38 @@ const getGovernmentIdUrl = async (req, res) => {
 };
 
 /**
+ * GET /api/admin/users/:id/identity-assets
+ * Returns decrypted government ID + selfie URLs for private admin review.
+ */
+const getIdentityReviewAssets = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+
+    const governmentIdUrl = user.governmentIdUrl ? decrypt(user.governmentIdUrl) : null;
+    const selfieUrl = user.selfieUrl ? decrypt(user.selfieUrl) : null;
+
+    if (!governmentIdUrl && !selfieUrl) {
+      return res.status(404).json({ success: false, message: 'No verification assets uploaded.' });
+    }
+
+    res.status(200).json({
+      success: true,
+      assets: {
+        governmentIdUrl,
+        selfieUrl,
+        idCardType: user.idCardType || null,
+        governmentIdNumberLast4: user.governmentIdNumberLast4 || null,
+        selfieUploadedAt: user.selfieUploadedAt || null,
+      },
+    });
+  } catch (err) {
+    console.error('[Admin] getIdentityReviewAssets error:', err.message);
+    res.status(500).json({ success: false, message: 'Could not retrieve identity review assets.' });
+  }
+};
+
+/**
  * PATCH /api/admin/users/:id/verify-id
  * Sets idVerificationStatus to 'verified' or 'rejected'.
  */
@@ -332,6 +364,16 @@ const verifyGovernmentId = async (req, res) => {
 
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+
+    const hasGovernmentId = Boolean(user.governmentIdUrl);
+    const hasSelfie = Boolean(user.selfieUrl);
+
+    if (action === 'approve' && (!hasGovernmentId || !hasSelfie)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot approve verification until both government ID and selfie are uploaded.',
+      });
+    }
 
     user.idVerificationStatus = action === 'approve' ? 'verified' : 'rejected';
     user.isVerified           = action === 'approve';
@@ -401,6 +443,7 @@ module.exports = {
   getUserById,
   toggleUserStatus,
   getGovernmentIdUrl,
+  getIdentityReviewAssets,
   verifyGovernmentId,
   getAuditLogs,
 };

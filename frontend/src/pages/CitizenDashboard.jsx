@@ -93,6 +93,7 @@ export default function CitizenDashboard() {
   const [formStep, setFormStep] = useState(1)
   const [verificationIdNumber, setVerificationIdNumber] = useState('')
   const [verificationFile, setVerificationFile] = useState(null)
+  const [verificationSelfieFile, setVerificationSelfieFile] = useState(null)
   const [uploadingVerification, setUploadingVerification] = useState(false)
   const syncInProgressRef = useRef(false)
 
@@ -202,6 +203,10 @@ export default function CitizenDashboard() {
   }, [reports])
 
   const canStartLiveStream = user?.role === 'user' && user?.idVerificationStatus === 'verified'
+  const hasGovernmentIdForVerification = Boolean(user?.hasGovernmentId)
+  const hasSelfieForVerification = Boolean(user?.hasVerificationSelfie)
+  const verificationProgressPercent =
+    (hasGovernmentIdForVerification ? 50 : 0) + (hasSelfieForVerification ? 50 : 0)
   const liveStreamRestriction = useMemo(() => {
     if (canStartLiveStream) return ''
     if (user?.role !== 'user') {
@@ -411,13 +416,34 @@ export default function CitizenDashboard() {
 
     try {
       setUploadingVerification(true)
-      await authService.uploadGovernmentId(verificationFile, verificationIdNumber.trim())
+      const response = await authService.uploadGovernmentId(verificationFile, verificationIdNumber.trim())
       await refreshUser()
       setVerificationFile(null)
       setVerificationIdNumber('')
-      toast.success('Government ID uploaded successfully. Verification is now pending admin review.')
+      toast.success(response?.data?.message || 'Government ID uploaded successfully.')
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to upload government ID')
+    } finally {
+      setUploadingVerification(false)
+    }
+  }
+
+  const uploadVerificationSelfie = async (e) => {
+    e.preventDefault()
+
+    if (!verificationSelfieFile) {
+      toast.error('Please choose a selfie file')
+      return
+    }
+
+    try {
+      setUploadingVerification(true)
+      const response = await authService.uploadVerificationSelfie(verificationSelfieFile)
+      await refreshUser()
+      setVerificationSelfieFile(null)
+      toast.success(response?.data?.message || 'Verification selfie uploaded successfully.')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to upload verification selfie')
     } finally {
       setUploadingVerification(false)
     }
@@ -567,11 +593,34 @@ export default function CitizenDashboard() {
         <section className="card p-4 space-y-3 border border-amber-300/70 dark:border-amber-700/60 bg-amber-50/60 dark:bg-amber-900/20">
           <h3 className="font-semibold text-amber-800 dark:text-amber-300">Identity verification required</h3>
           <p className="text-sm text-slate-700 dark:text-slate-300">
-            You must upload a valid government ID and wait for admin approval before submitting incident reports.
+            You must upload both a valid government ID and a recent selfie, then wait for admin approval before submitting incident reports.
             Current status: <span className="font-semibold capitalize">{user?.idVerificationStatus || 'none'}</span>
+            <span className="ml-2 inline-flex items-center rounded-full border border-indigo-300 dark:border-indigo-700 bg-indigo-100 dark:bg-indigo-900/30 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 dark:text-indigo-300">
+              {verificationProgressPercent}% complete
+            </span>
           </p>
 
-          <form onSubmit={uploadVerificationId} className="grid md:grid-cols-3 gap-3 items-end">
+          <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 bg-white/70 dark:bg-slate-900/40">
+            <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">Verification progress</p>
+            <div className="flex flex-wrap gap-2">
+              <span className={`text-xs px-2.5 py-1 rounded-full border ${hasGovernmentIdForVerification ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700' : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'}`}>
+                {hasGovernmentIdForVerification ? '✅ Government ID uploaded' : '⏳ Government ID pending'}
+              </span>
+              <span className={`text-xs px-2.5 py-1 rounded-full border ${hasSelfieForVerification ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700' : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'}`}>
+                {hasSelfieForVerification ? '✅ Selfie uploaded' : '⏳ Selfie pending'}
+              </span>
+              <span className={`text-xs px-2.5 py-1 rounded-full border ${user?.idVerificationStatus === 'pending' ? 'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-700' : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'}`}>
+                {user?.idVerificationStatus === 'pending' ? '🕵️ Admin review in progress' : '⏳ Waiting for both uploads'}
+              </span>
+            </div>
+            {user?.idVerificationStatus === 'rejected' && user?.idRejectionReason && (
+              <p className="text-xs text-rose-700 dark:text-rose-300 mt-2">
+                Last rejection reason: {user.idRejectionReason}
+              </p>
+            )}
+          </div>
+
+          <form onSubmit={uploadVerificationId} className="grid md:grid-cols-4 gap-3 items-end">
             <div>
               <label className="label">ID card number</label>
               <input
@@ -591,7 +640,22 @@ export default function CitizenDashboard() {
               />
             </div>
             <button type="submit" className="btn-primary" disabled={uploadingVerification}>
-              {uploadingVerification ? 'Uploading…' : 'Upload ID for Verification'}
+              {uploadingVerification ? 'Uploading…' : 'Upload Government ID'}
+            </button>
+          </form>
+
+          <form onSubmit={uploadVerificationSelfie} className="grid md:grid-cols-3 gap-3 items-end">
+            <div className="md:col-span-2">
+              <label className="label">Verification selfie</label>
+              <input
+                className="input"
+                type="file"
+                accept="image/*"
+                onChange={(e) => setVerificationSelfieFile(e.target.files?.[0] || null)}
+              />
+            </div>
+            <button type="submit" className="btn-primary" disabled={uploadingVerification}>
+              {uploadingVerification ? 'Uploading…' : 'Upload Selfie'}
             </button>
           </form>
         </section>

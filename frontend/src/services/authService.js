@@ -15,4 +15,18 @@ export const authService = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  uploadProfilePhoto: (file) => {
+    const form = new FormData();
+    form.append('profilePhoto', file);
+    return api.post('/auth/upload-profile-photo', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  uploadVerificationSelfie: (file) => {
+    const form = new FormData();
+    form.append('selfie', file);
+    return api.post('/auth/upload-selfie', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };

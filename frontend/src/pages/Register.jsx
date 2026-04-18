@@ -20,6 +20,7 @@ export default function Register() {
   ]
   const fallbackIdCardTypes = ['nin', 'bvn', 'passport', 'government_issued_valid_id_card']
   const [idFile, setIdFile] = useState(null)
+  const [profilePhotoFile, setProfilePhotoFile] = useState(null)
   const [cloudinaryConfigured, setCloudinaryConfigured] = useState(true)
   const [form, setForm] = useState({
     name: '',
@@ -78,6 +79,18 @@ export default function Register() {
     if (!result.success) {
       toast.error(result.message)
       return
+    }
+
+    if (profilePhotoFile) {
+      try {
+        await authService.uploadProfilePhoto(profilePhotoFile)
+        await refreshUser()
+        toast.success('Profile picture uploaded successfully')
+      } catch (err) {
+        const message = err.response?.data?.message || 'Account created, but profile picture upload failed'
+        toast.error(message)
+        toast('You can continue and upload a profile picture later.', { icon: 'ℹ️' })
+      }
     }
 
     if (cloudinaryConfigured) {
@@ -165,6 +178,17 @@ export default function Register() {
               required={cloudinaryConfigured}
               placeholder="Enter your selected ID number"
             />
+          </div>
+
+          <div>
+            <label className="label">Profile Picture (optional)</label>
+            <input
+              className="input"
+              type="file"
+              accept="image/*"
+              onChange={(e) => setProfilePhotoFile(e.target.files?.[0] || null)}
+            />
+            <p className="text-xs text-slate-400 mt-1">Allowed formats: JPG, PNG, WEBP, GIF. Max size: 10MB.</p>
           </div>
 
           <div>

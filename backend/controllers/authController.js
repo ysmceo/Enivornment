@@ -39,6 +39,15 @@ const validateIdNumberByType = (idCardType, idCardNumber) => {
   return { ok: true, sanitized: value };
 };
 
+const computePendingVerificationStatus = (userDocLike) => {
+  const hasGovernmentId = Boolean(userDocLike?.governmentIdUrl);
+  const hasSelfie = Boolean(userDocLike?.selfieUrl);
+
+  // Verification can only move to pending review after both artifacts are present
+  if (hasGovernmentId && hasSelfie) return 'pending';
+  return 'none';
+};
+
 // ─── Helper: send token in response ──────────────────────────────────────
 const sendTokenResponse = (user, statusCode, res) => {
   const token = signToken(user._id);
@@ -283,6 +292,10 @@ const uploadGovernmentId = async (req, res) => {
     const encryptedUrl = encrypt(req.file.path);
     const encryptedIdNumber = encrypt(idNumberCheck.sanitized);
     const idNumberLast4 = idNumberCheck.sanitized.slice(-4);
+    const nextStatus = computePendingVerificationStatus({
+      governmentIdUrl: encryptedUrl,
+      selfieUrl: existingUser?.selfieUrl,
+    });
 
     const user = await User.findByIdAndUpdate(
       req.user._id,
@@ -292,7 +305,7 @@ const uploadGovernmentId = async (req, res) => {
         governmentIdPublicId:     req.file.filename,
         governmentIdNumber:       encryptedIdNumber,
         governmentIdNumberLast4:  idNumberLast4,
-        idVerificationStatus:     'pending',
+        idVerificationStatus:     nextStatus,
         idRejectionReason:        null,
         isVerified:               false,
       },
@@ -310,12 +323,16 @@ const uploadGovernmentId = async (req, res) => {
         verificationStatus: user.idVerificationStatus,
         idCardType: user.idCardType,
         idNumberLast4,
+        hasSelfie: Boolean(user.selfieUrl),
       },
     });
 
     res.status(200).json({
       success: true,
-      message: 'Government ID uploaded. Verification pending.',
+      message:
+        user.idVerificationStatus === 'pending'
+          ? 'Government ID uploaded. Verification pending.'
+          : 'Government ID uploaded. Please upload a verification selfie to continue.',
       idVerificationStatus: user.idVerificationStatus,
     });
   } catch (err) {
@@ -324,4 +341,130 @@ const uploadGovernmentId = async (req, res) => {
   }
 };
 
-module.exports = { register, login, logout, getMe, updateProfile, changePassword, uploadGovernmentId };
+// ─── UPLOAD VERIFICATION SELFIE ───────────────────────────────────────────
+/**
+ * POST /api/auth/upload-selfie
+ * Handles verification selfie upload. URL is encrypted before persistence.
+ */
+const uploadVerificationSelfie = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No selfie uploaded.' });
+    }
+
+    const existingUser = await User.findById(req.user._id);
+    if (!existingUser) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    if (existingUser.selfiePublicId) {
+      await cloudinary.uploader.destroy(existingUser.selfiePublicId, { resource_type: 'image' }).catch(() => {});
+    }
+
+    const encryptedSelfieUrl = encrypt(req.file.path);
+    const nextStatus = computePendingVerificationStatus({
+      governmentIdUrl: existingUser?.governmentIdUrl,
+      selfieUrl: encryptedSelfieUrl,
+    });
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      {
+        selfieUrl: encryptedSelfieUrl,
+        selfiePublicId: req.file.filename,
+        selfieUploadedAt: new Date(),
+        idVerificationStatus: nextStatus,
+        idRejectionReason: null,
+        isVerified: false,
+      },
+      { new: true }
+    );
+
+    await recordAuditLog({
+      req,
+      actor: req.user._id,
+      actorRole: req.user.role,
+      action: 'verification_selfie_uploaded',
+      entityType: 'user',
+      entityId: req.user._id,
+      metadata: {
+        verificationStatus: user.idVerificationStatus,
+        hasGovernmentId: Boolean(user.governmentIdUrl),
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message:
+        user.idVerificationStatus === 'pending'
+          ? 'Selfie uploaded. Verification pending.'
+          : 'Selfie uploaded. Please upload your government ID to continue.',
+      idVerificationStatus: user.idVerificationStatus,
+    });
+  } catch (err) {
+    console.error('[Auth] uploadVerificationSelfie error:', err.message);
+    res.status(500).json({ success: false, message: 'Server error during selfie upload.' });
+  }
+};
+
+// ─── UPLOAD PROFILE PHOTO ────────────────────────────────────────────────
+/**
+ * POST /api/auth/upload-profile-photo
+ * Uploads profile picture and stores Cloudinary URL on the user account.
+ */
+const uploadProfilePhoto = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No profile photo uploaded.' });
+    }
+
+    const existingUser = await User.findById(req.user._id);
+    if (!existingUser) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    if (existingUser.profilePhotoPublicId) {
+      await cloudinary.uploader.destroy(existingUser.profilePhotoPublicId, { resource_type: 'image' }).catch(() => {});
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      {
+        profilePhoto: req.file.path,
+        profilePhotoPublicId: req.file.filename,
+      },
+      { new: true }
+    );
+
+    await recordAuditLog({
+      req,
+      actor: req.user._id,
+      actorRole: req.user.role,
+      action: 'profile_photo_uploaded',
+      entityType: 'user',
+      entityId: req.user._id,
+      metadata: { hasProfilePhoto: Boolean(user?.profilePhoto) },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile photo uploaded successfully.',
+      profilePhoto: user.profilePhoto,
+    });
+  } catch (err) {
+    console.error('[Auth] uploadProfilePhoto error:', err.message);
+    res.status(500).json({ success: false, message: 'Server error during profile photo upload.' });
+  }
+};
+
+module.exports = {
+  register,
+  login,
+  logout,
+  getMe,
+  updateProfile,
+  changePassword,
+  uploadGovernmentId,
+  uploadVerificationSelfie,
+  uploadProfilePhoto,
+};

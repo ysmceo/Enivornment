@@ -61,6 +61,22 @@ const userSchema = new mongoose.Schema(
       default: null,
     },
 
+    // Encrypted selfie URL used for liveness/face match checks by admin reviewers
+    selfieUrl: {
+      type: String,
+      default: null,
+    },
+
+    selfiePublicId: {
+      type: String,
+      default: null,
+    },
+
+    selfieUploadedAt: {
+      type: Date,
+      default: null,
+    },
+
     // Encrypted ID number submitted with uploaded government ID
     governmentIdNumber: {
       type: String,
@@ -104,6 +120,11 @@ const userSchema = new mongoose.Schema(
       default: null,
     },
 
+    profilePhotoPublicId: {
+      type: String,
+      default: null,
+    },
+
     phone: {
       type: String,
       default: null,
@@ -137,11 +158,19 @@ const userSchema = new mongoose.Schema(
     timestamps: true,
     toJSON: {
       transform(doc, ret) {
+        // Expose safe, non-sensitive verification progress indicators
+        ret.hasGovernmentId = Boolean(ret.governmentIdUrl);
+        ret.hasVerificationSelfie = Boolean(ret.selfieUrl);
+
         // Strip sensitive fields from any JSON serialisation
         delete ret.password;
         delete ret.loginAttempts;
         delete ret.lockedUntil;
         delete ret.governmentIdNumber;
+        delete ret.governmentIdUrl;
+        delete ret.governmentIdPublicId;
+        delete ret.selfieUrl;
+        delete ret.selfiePublicId;
         return ret;
       },
     },

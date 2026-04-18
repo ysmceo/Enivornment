@@ -37,6 +37,7 @@ export const userService = {
   getUserById:        (id)     => api.get(`/admin/users/${id}`),
   toggleUserStatus:   (id)     => api.patch(`/admin/users/${id}/toggle-status`),
   getGovernmentIdUrl: (id)     => api.get(`/admin/users/${id}/government-id`),
+  getIdentityReviewAssets: (id) => api.get(`/admin/users/${id}/identity-assets`),
   verifyGovernmentId: (id, data) => api.patch(`/admin/users/${id}/verify-id`, data),
   getAuditLogs: (params) => api.get('/admin/audit-logs', { params }),
 };

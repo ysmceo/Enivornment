@@ -34,6 +34,17 @@ const isCloudinaryConfigured = () => {
   ].some((item) => isPlaceholderValue(item));
 };
 
+const ensureCloudinaryUploadConfigured = (req, res, next) => {
+  if (!isCloudinaryConfigured()) {
+    return res.status(503).json({
+      success: false,
+      message: 'File upload is not configured yet (Cloudinary keys are placeholders). Please try again later.',
+    });
+  }
+
+  return next();
+};
+
 const ensureGovernmentIdUploadConfigured = (req, res, next) => {
   if (!isCloudinaryConfigured()) {
     return res.status(503).json({
@@ -78,6 +89,43 @@ const uploadGovernmentId = multer({
   limits:  { fileSize: MAX_DOC_SIZE, files: 1 },
   fileFilter: buildFileFilter(ALLOWED_DOC_TYPES),
 }).single('governmentId');
+
+// ─── Verification selfie upload ───────────────────────────────────────────
+const selfieStorage = new CloudinaryStorage({
+  cloudinary,
+  params: async (req) => ({
+    folder: 'crime-reporting/verification-selfies',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    resource_type: 'image',
+    transformation: [{ quality: 'auto', fetch_format: 'auto' }],
+    tags: [`user_${req.user?._id}`],
+    access_mode: 'authenticated',
+  }),
+});
+
+const uploadSelfie = multer({
+  storage: selfieStorage,
+  limits: { fileSize: MAX_DOC_SIZE, files: 1 },
+  fileFilter: buildFileFilter(ALLOWED_IMAGE_TYPES),
+}).single('selfie');
+
+// ─── Profile photo upload ────────────────────────────────────────────────
+const profilePhotoStorage = new CloudinaryStorage({
+  cloudinary,
+  params: async (req) => ({
+    folder: 'crime-reporting/profile-photos',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    resource_type: 'image',
+    transformation: [{ quality: 'auto', fetch_format: 'auto' }],
+    tags: [`user_${req.user?._id}`],
+  }),
+});
+
+const uploadProfilePhoto = multer({
+  storage: profilePhotoStorage,
+  limits: { fileSize: MAX_IMAGE_SIZE, files: 1 },
+  fileFilter: buildFileFilter(ALLOWED_IMAGE_TYPES),
+}).single('profilePhoto');
 
 // ─── Report media upload ───────────────────────────────────────────────────
 // Images and videos; up to 10 files per report.
@@ -130,7 +178,10 @@ const handleUpload = (uploadFn) => (req, res, next) => {
 
 module.exports = {
   uploadGovernmentId,
+  uploadSelfie,
+  uploadProfilePhoto,
   uploadMedia,
   handleUpload,
+  ensureCloudinaryUploadConfigured,
   ensureGovernmentIdUploadConfigured,
 };

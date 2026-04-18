@@ -1,14 +1,17 @@
 const express  = require('express');
 const { body } = require('express-validator');
 const {
-  register, login, logout, getMe, updateProfile, changePassword, uploadGovernmentId,
+  register, login, logout, getMe, updateProfile, changePassword, uploadGovernmentId, uploadVerificationSelfie, uploadProfilePhoto,
 } = require('../controllers/authController');
 const { protect }                         = require('../middleware/auth');
 const { authLimiter, uploadLimiter }      = require('../middleware/rateLimiter');
 const validate                            = require('../middleware/validate');
 const {
   uploadGovernmentId: uploadIdMiddleware,
+  uploadSelfie: uploadSelfieMiddleware,
+  uploadProfilePhoto: uploadProfilePhotoMiddleware,
   handleUpload,
+  ensureCloudinaryUploadConfigured,
   ensureGovernmentIdUploadConfigured,
 } = require('../middleware/upload');
 const {
@@ -42,6 +45,22 @@ router.post(
   ensureGovernmentIdUploadConfigured,
   handleUpload(uploadIdMiddleware),
   uploadGovernmentId
+);
+
+router.post(
+  '/upload-selfie',
+  uploadLimiter,
+  ensureGovernmentIdUploadConfigured,
+  handleUpload(uploadSelfieMiddleware),
+  uploadVerificationSelfie
+);
+
+router.post(
+  '/upload-profile-photo',
+  uploadLimiter,
+  ensureCloudinaryUploadConfigured,
+  handleUpload(uploadProfilePhotoMiddleware),
+  uploadProfilePhoto
 );
 
 module.exports = router;

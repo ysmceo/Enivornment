@@ -10,7 +10,7 @@ import { userService } from '../services/reportService'
 export default function AdminVerification() {
   const [users, setUsers] = useState([])
   const [selected, setSelected] = useState(null)
-  const [docUrl, setDocUrl] = useState('')
+  const [identityAssets, setIdentityAssets] = useState(null)
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
 
@@ -25,12 +25,12 @@ export default function AdminVerification() {
 
   const openReview = async (u) => {
     setSelected(u)
-    setDocUrl('')
+    setIdentityAssets(null)
     try {
-      const { data } = await userService.getGovernmentIdUrl(u._id)
-      setDocUrl(data.url)
+      const { data } = await userService.getIdentityReviewAssets(u._id)
+      setIdentityAssets(data.assets || null)
     } catch {
-      setDocUrl('')
+      setIdentityAssets(null)
     }
   }
 
@@ -107,12 +107,30 @@ export default function AdminVerification() {
       >
         {selected && (
           <div className="space-y-3">
-            <p className="text-sm text-slate-500">Review uploaded government ID and choose an action.</p>
-            {docUrl ? (
-              <a href={docUrl} target="_blank" rel="noreferrer" className="text-indigo-600 text-sm font-semibold">Open uploaded ID document</a>
-            ) : (
-              <p className="text-sm text-slate-500">No preview URL available.</p>
-            )}
+            <p className="text-sm text-slate-500">Review uploaded government ID and selfie, then choose an action.</p>
+
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 text-sm space-y-1">
+              <p><span className="font-semibold">ID type:</span> {identityAssets?.idCardType || 'Not provided'}</p>
+              <p><span className="font-semibold">ID number (last 4):</span> {identityAssets?.governmentIdNumberLast4 || 'Not available'}</p>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-wide text-slate-500">Government ID</p>
+              {identityAssets?.governmentIdUrl ? (
+                <a href={identityAssets.governmentIdUrl} target="_blank" rel="noreferrer" className="text-indigo-600 text-sm font-semibold">Open uploaded ID document</a>
+              ) : (
+                <p className="text-sm text-slate-500">Government ID missing.</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-wide text-slate-500">Verification Selfie</p>
+              {identityAssets?.selfieUrl ? (
+                <a href={identityAssets.selfieUrl} target="_blank" rel="noreferrer" className="text-indigo-600 text-sm font-semibold">Open uploaded selfie</a>
+              ) : (
+                <p className="text-sm text-slate-500">Verification selfie missing.</p>
+              )}
+            </div>
           </div>
         )}
       </Modal>

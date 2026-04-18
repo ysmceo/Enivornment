@@ -8,6 +8,7 @@ const {
   getUserById,
   toggleUserStatus,
   getGovernmentIdUrl,
+  getIdentityReviewAssets,
   verifyGovernmentId,
   getAuditLogs,
 } = require('../controllers/adminController');
@@ -41,6 +42,7 @@ router.patch('/users/:id/toggle-status', mongoIdParamValidation('id'), validate,
 
 // ─── ID verification ───────────────────────────────────────────────────────
 router.get('/users/:id/government-id', mongoIdParamValidation('id'), validate, getGovernmentIdUrl);
+router.get('/users/:id/identity-assets', mongoIdParamValidation('id'), validate, getIdentityReviewAssets);
 router.patch('/users/:id/verify-id', verifyGovernmentIdValidation, validate, verifyGovernmentId);
 
 module.exports = router;
