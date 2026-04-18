@@ -7,26 +7,49 @@ import StatsCard from '../components/StatsCard'
 import Badge from '../components/Badge'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { reportService, userService } from '../services/reportService'
+import { platformService } from '../services/platformService'
+
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+
+const isUsableGoogleMapsKey = (value) => {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (!normalized) return false
+
+  const placeholderPatterns = [
+    'replace',
+    'your_',
+    'example',
+    'placeholder',
+    'optional',
+    'dummy',
+    'test',
+  ]
+
+  return !placeholderPatterns.some((pattern) => normalized.includes(pattern))
+}
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState(null)
   const [recentReports, setRecentReports] = useState([])
   const [auditLogs, setAuditLogs] = useState([])
   const [mapSummary, setMapSummary] = useState(null)
+  const [configHealth, setConfigHealth] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const load = async () => {
-      const [statsRes, reportsRes, auditRes, mapRes] = await Promise.all([
+      const [statsRes, reportsRes, auditRes, mapRes, healthRes] = await Promise.all([
         reportService.getAdminStats(),
         reportService.adminGetAllReports({ limit: 8 }),
         userService.getAuditLogs({ limit: 6 }),
         reportService.getMapSummary(),
+        platformService.getConfigHealth(),
       ])
       setStats(statsRes.data.stats)
       setRecentReports(reportsRes.data.reports || [])
       setAuditLogs(auditRes.data.logs || [])
       setMapSummary(mapRes?.data?.summary || null)
+      setConfigHealth(healthRes?.data?.configHealth || null)
       setLoading(false)
     }
 
@@ -55,6 +78,18 @@ export default function AdminDashboard() {
         </header>
 
         <main className="flex-1 overflow-y-auto p-6 space-y-5">
+          {configHealth && (
+            <section className="card p-4 space-y-2">
+              <p className="text-xs uppercase tracking-wide text-slate-500">System Setup Health</p>
+              <div className="flex flex-wrap gap-2">
+                <Badge status={configHealth?.database?.connected ? 'active' : 'degraded'} label="Database" dot />
+                <Badge status={configHealth?.cloudinary?.configured ? 'configured' : 'unconfigured'} label="Cloudinary Upload" dot />
+                <Badge status={isUsableGoogleMapsKey(GOOGLE_MAPS_API_KEY) ? 'configured' : 'fallback'} label="Browser Maps Key" dot />
+                <Badge status={configHealth?.auth?.jwtConfigured ? 'configured' : 'unconfigured'} label="JWT Secret" dot />
+              </div>
+            </section>
+          )}
+
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
             <StatsCard icon={Users} label="Users" value={stats?.totalUsers ?? 0} color="blue" />
             <StatsCard icon={FileWarning} label="Reports" value={stats?.totalReports ?? 0} color="indigo" />
