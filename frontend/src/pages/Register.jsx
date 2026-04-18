@@ -20,6 +20,7 @@ export default function Register() {
   ]
   const fallbackIdCardTypes = ['nin', 'bvn', 'passport', 'government_issued_valid_id_card']
   const [idFile, setIdFile] = useState(null)
+  const [cloudinaryConfigured, setCloudinaryConfigured] = useState(true)
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -40,12 +41,18 @@ export default function Register() {
   useEffect(() => {
     const loadStates = async () => {
       try {
-        const res = await platformService.getMetadata()
-        setStates(res.data.metadata?.states || fallbackStates)
-        setIdCardTypes(res.data.metadata?.idCardTypes || fallbackIdCardTypes)
+        const [metaRes, healthRes] = await Promise.all([
+          platformService.getMetadata(),
+          platformService.getConfigHealth(),
+        ])
+
+        setStates(metaRes.data.metadata?.states || fallbackStates)
+        setIdCardTypes(metaRes.data.metadata?.idCardTypes || fallbackIdCardTypes)
+        setCloudinaryConfigured(Boolean(healthRes.data?.configHealth?.cloudinary?.configured))
       } catch {
         setStates(fallbackStates)
         setIdCardTypes(fallbackIdCardTypes)
+        setCloudinaryConfigured(false)
       }
     }
 
@@ -55,14 +62,16 @@ export default function Register() {
   const onSubmit = async (e) => {
     e.preventDefault()
 
-    if (!form.idCardNumber.trim()) {
-      toast.error('Please enter your ID card number')
-      return
-    }
+    if (cloudinaryConfigured) {
+      if (!form.idCardNumber.trim()) {
+        toast.error('Please enter your ID card number')
+        return
+      }
 
-    if (!idFile) {
-      toast.error('Please upload a valid government ID file (JPG, PNG, WEBP, or PDF)')
-      return
+      if (!idFile) {
+        toast.error('Please upload a valid government ID file (JPG, PNG, WEBP, or PDF)')
+        return
+      }
     }
 
     const result = await register(form)
@@ -71,14 +80,18 @@ export default function Register() {
       return
     }
 
-    try {
-      await authService.uploadGovernmentId(idFile, form.idCardNumber)
-      await refreshUser()
-      toast.success('Account created and ID uploaded for verification')
-    } catch (err) {
-      const message = err.response?.data?.message || 'Account created, but ID upload failed'
-      toast.error(message)
-      toast('You can still continue and sign in. Upload can be retried later.', { icon: 'ℹ️' })
+    if (cloudinaryConfigured) {
+      try {
+        await authService.uploadGovernmentId(idFile, form.idCardNumber)
+        await refreshUser()
+        toast.success('Account created and ID uploaded for verification')
+      } catch (err) {
+        const message = err.response?.data?.message || 'Account created, but ID upload failed'
+        toast.error(message)
+        toast('You can still continue and sign in. Upload can be retried later.', { icon: 'ℹ️' })
+      }
+    } else {
+      toast('Government ID upload is not configured yet (Cloudinary keys are placeholders). Account creation can still continue.', { icon: 'ℹ️' })
     }
 
     navigate('/dashboard')
@@ -149,15 +162,24 @@ export default function Register() {
               className="input"
               value={form.idCardNumber}
               onChange={(e) => setForm((p) => ({ ...p, idCardNumber: e.target.value }))}
-              required
+              required={cloudinaryConfigured}
               placeholder="Enter your selected ID number"
             />
           </div>
 
           <div>
-            <label className="label">Government ID Upload (required)</label>
-            <input className="input" type="file" accept="image/*,.pdf" onChange={(e) => setIdFile(e.target.files?.[0] || null)} />
+            <label className="label">Government ID Upload ({cloudinaryConfigured ? 'required' : 'optional'})</label>
+            <input
+              className="input"
+              type="file"
+              accept="image/*,.pdf"
+              onChange={(e) => setIdFile(e.target.files?.[0] || null)}
+              disabled={!cloudinaryConfigured}
+            />
             <p className="text-xs text-slate-400 mt-1">Allowed formats: JPG, PNG, WEBP, PDF. Max size: 5MB.</p>
+            {!cloudinaryConfigured && (
+              <p className="text-xs text-amber-300 mt-1">Government ID upload is not configured yet (Cloudinary keys are placeholders). Account creation can still continue.</p>
+            )}
           </div>
 
           <button className="btn-primary w-full" disabled={loading} type="submit">
