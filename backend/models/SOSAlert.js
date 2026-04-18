@@ -99,8 +99,6 @@ const sosAlertSchema = new mongoose.Schema(
 );
 
 // ─── Indexes ───────────────────────────────────────────────────────────────
-sosAlertSchema.index({ userId: 1 });
-sosAlertSchema.index({ status: 1 });
 sosAlertSchema.index({ 'currentLocation.coordinates': '2dsphere' });
 sosAlertSchema.index({ createdAt: -1 });
 sosAlertSchema.index({ 'locationHistory.coordinates': '2dsphere' });

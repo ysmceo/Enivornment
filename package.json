@@ -8,6 +8,9 @@
     "dev:all": "concurrently -n backend,frontend -c blue,magenta \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\"",
     "dev:backend": "npm --prefix backend run dev",
     "dev:frontend": "npm --prefix frontend run dev",
+    "dev:mobile": "npm --prefix mobile run start",
+    "dev:mobile:android": "npm --prefix mobile run android",
+    "dev:mobile:ios": "npm --prefix mobile run ios",
     "build": "npm --prefix frontend run build",
     "start": "npm --prefix backend start"
   },

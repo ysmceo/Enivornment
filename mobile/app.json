@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "Crime Reporting Mobile",
+    "slug": "crime-reporting-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0f172a"
+      }
+    }
+  }
+}
