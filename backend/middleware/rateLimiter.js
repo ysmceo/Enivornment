@@ -1,5 +1,7 @@
 const rateLimit = require('express-rate-limit');
 
+const isDev = process.env.NODE_ENV !== 'production';
+
 /**
  * Generic rate limiter factory.
  * windowMs in milliseconds, max = maximum requests per window.
@@ -17,35 +19,35 @@ const createLimiter = (windowMs, max, message) =>
 // ─── Public / general routes ──────────────────────────────────────────────
 const generalLimiter = createLimiter(
   15 * 60 * 1000, // 15 minutes
-  100,
+  isDev ? 2000 : 100,
   'Too many requests. Please try again in 15 minutes.'
 );
 
 // ─── Authentication endpoints (stricter to prevent brute-force) ───────────
 const authLimiter = createLimiter(
   15 * 60 * 1000, // 15 minutes
-  10,
+  isDev ? 120 : 10,
   'Too many authentication attempts. Please try again in 15 minutes.'
 );
 
 // ─── File upload endpoints ─────────────────────────────────────────────────
 const uploadLimiter = createLimiter(
   60 * 60 * 1000, // 1 hour
-  20,
+  isDev ? 200 : 20,
   'Upload limit reached. Please try again in 1 hour.'
 );
 
 // ─── Admin endpoints ───────────────────────────────────────────────────────
 const adminLimiter = createLimiter(
   15 * 60 * 1000,
-  200,
+  isDev ? 3000 : 200,
   'Too many admin requests. Please try again later.'
 );
 
 // ─── News feed endpoints (frequent polling + category switching) ───────────
 const newsLimiter = createLimiter(
   60 * 1000, // 1 minute
-  45,
+  isDev ? 600 : 45,
   'Too many news requests. Please slow down and try again shortly.'
 );
 
