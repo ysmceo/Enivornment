@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 const { encrypt, decrypt } = require('../utils/encryption');
 const cloudinary  = require('../config/cloudinary');
 const { recordAuditLog } = require('../services/auditService');
@@ -9,6 +10,50 @@ const {
   buildAuthCookieOptions,
   sanitizeUserForResponse,
 } = require('../services/authService');
+
+const buildResetPasswordUrl = (resetToken) => {
+  const explicitResetBase = String(process.env.RESET_PASSWORD_URL || '').trim();
+  if (explicitResetBase) {
+    const normalized = explicitResetBase.replace(/\/$/, '');
+    return `${normalized}?token=${encodeURIComponent(resetToken)}`;
+  }
+
+  const clientBase = String(process.env.CLIENT_URL || 'http://localhost:5175')
+    .split(',')[0]
+    .trim()
+    .replace(/\/$/, '');
+
+  return `${clientBase}/reset-password?token=${encodeURIComponent(resetToken)}`;
+};
+
+const sendResetPasswordEmail = async ({ toEmail, resetUrl }) => {
+  const nodemailer = require('nodemailer');
+
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    throw new Error('Email service is not configured.');
+  }
+
+  const transporter = nodemailer.createTransport({
+    service: process.env.EMAIL_SERVICE || 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+  });
+
+  await transporter.sendMail({
+    to: toEmail,
+    from: process.env.EMAIL_USER,
+    subject: 'Reset your password',
+    html: `
+      <p>You requested a password reset.</p>
+      <p>Click the link below to set a new password:</p>
+      <p><a href="${resetUrl}">${resetUrl}</a></p>
+      <p>This link expires in 15 minutes.</p>
+      <p>If you did not request this, you can ignore this message.</p>
+    `,
+  });
+};
 
 const ID_NUMBER_PATTERNS = {
   nin: /^\d{11}$/,
@@ -319,6 +364,115 @@ const changePassword = async (req, res) => {
   }
 };
 
+// ─── FORGOT PASSWORD ─────────────────────────────────────────────────────
+/**
+ * POST /api/auth/forgot-password
+ */
+const forgotPassword = async (req, res) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required.' });
+    }
+
+    const genericMessage = 'If an account exists for this email, a reset link has been sent.';
+    const user = await User.findOne({ email }).select('+passwordResetToken +passwordResetExpires');
+    if (!user) {
+      return res.status(200).json({ success: true, message: genericMessage });
+    }
+
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expiry = new Date(Date.now() + 15 * 60 * 1000);
+
+    user.passwordResetToken = hashedToken;
+    user.passwordResetExpires = expiry;
+    await user.save({ validateBeforeSave: false });
+
+    const resetUrl = buildResetPasswordUrl(rawToken);
+
+    try {
+      await sendResetPasswordEmail({ toEmail: user.email, resetUrl });
+    } catch (emailErr) {
+      if (process.env.NODE_ENV !== 'production') {
+        return res.status(200).json({
+          success: true,
+          message: `${genericMessage} (Email service unavailable in local mode. Use resetUrl directly.)`,
+          resetUrl,
+        });
+      }
+
+      console.error('[Auth] forgotPassword email error:', emailErr.message);
+    }
+
+    await recordAuditLog({
+      req,
+      actor: user._id,
+      actorRole: user.role,
+      action: 'password_reset_requested',
+      entityType: 'user',
+      entityId: user._id,
+      metadata: { email: user.email },
+    });
+
+    return res.status(200).json({ success: true, message: genericMessage });
+  } catch (err) {
+    console.error('[Auth] forgotPassword error:', err.message);
+    return res.status(500).json({ success: false, message: 'Server error processing reset request.' });
+  }
+};
+
+// ─── RESET PASSWORD ──────────────────────────────────────────────────────
+/**
+ * POST /api/auth/reset-password
+ */
+const resetPassword = async (req, res) => {
+  try {
+    const token = String(req.body?.token || '').trim();
+    const newPassword = String(req.body?.newPassword || '').trim();
+
+    if (!token || !newPassword) {
+      return res.status(400).json({ success: false, message: 'Token and new password are required.' });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({ success: false, message: 'New password must be at least 8 characters.' });
+    }
+
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+    const user = await User.findOne({
+      passwordResetToken: hashedToken,
+      passwordResetExpires: { $gt: new Date() },
+    }).select('+password +passwordResetToken +passwordResetExpires');
+
+    if (!user) {
+      return res.status(400).json({ success: false, message: 'Reset token is invalid or has expired.' });
+    }
+
+    user.password = newPassword;
+    user.passwordResetToken = null;
+    user.passwordResetExpires = null;
+    user.loginAttempts = 0;
+    user.lockedUntil = null;
+    await user.save({ validateBeforeSave: false });
+
+    await recordAuditLog({
+      req,
+      actor: user._id,
+      actorRole: user.role,
+      action: 'password_reset_completed',
+      entityType: 'user',
+      entityId: user._id,
+      metadata: {},
+    });
+
+    return res.status(200).json({ success: true, message: 'Password reset successful. Please log in.' });
+  } catch (err) {
+    console.error('[Auth] resetPassword error:', err.message);
+    return res.status(500).json({ success: false, message: 'Server error while resetting password.' });
+  }
+};
+
 // ─── UPLOAD GOVERNMENT ID ─────────────────────────────────────────────────
 /**
  * POST /api/auth/upload-id
@@ -568,6 +722,8 @@ module.exports = {
   getMe,
   updateProfile,
   changePassword,
+  forgotPassword,
+  resetPassword,
   uploadGovernmentId,
   uploadVerificationSelfie,
   uploadProfilePhoto,

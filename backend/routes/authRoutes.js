@@ -1,7 +1,7 @@
 const express  = require('express');
 const { body } = require('express-validator');
 const {
-  register, login, logout, getMe, updateProfile, changePassword, uploadGovernmentId, uploadVerificationSelfie, uploadProfilePhoto,
+  register, login, logout, getMe, updateProfile, changePassword, forgotPassword, resetPassword, uploadGovernmentId, uploadVerificationSelfie, uploadProfilePhoto,
 } = require('../controllers/authController');
 const { protect }                         = require('../middleware/auth');
 const { authLimiter, uploadLimiter }      = require('../middleware/rateLimiter');
@@ -26,6 +26,8 @@ const router = express.Router();
 // Public routes
 router.post('/register', authLimiter, registerValidation, validate, register);
 router.post('/login',    authLimiter, loginValidation,    validate, login);
+router.post('/forgot-password', authLimiter, forgotPassword);
+router.post('/reset-password', authLimiter, resetPassword);
 router.post('/logout',   protect, logout);
 
 // Protected routes

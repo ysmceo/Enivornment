@@ -21,6 +21,8 @@ const lazyWithReload = (importer) =>
 const Landing = lazyWithReload(() => import('./pages/Landing'))
 const Login = lazyWithReload(() => import('./pages/Login'))
 const Register = lazyWithReload(() => import('./pages/Register'))
+const ForgotPassword = lazyWithReload(() => import('./pages/ForgotPassword'))
+const ResetPassword = lazyWithReload(() => import('./pages/ResetPassword'))
 const Preview = lazyWithReload(() => import('./pages/Preview'))
 const CitizenDashboard = lazyWithReload(() => import('./pages/CitizenDashboard'))
 const AdminDashboard = lazyWithReload(() => import('./pages/AdminDashboard'))
@@ -57,6 +59,8 @@ export default function App() {
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/preview" element={<Preview />} />
             <Route path="/news" element={<Navigate to="/news/all" replace />} />
             <Route path="/news/:category" element={<NewsCategoryPage />} />

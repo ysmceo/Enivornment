@@ -146,6 +146,18 @@ const userSchema = new mongoose.Schema(
       default: null,
     },
 
+    passwordResetToken: {
+      type: String,
+      default: null,
+      select: false,
+    },
+
+    passwordResetExpires: {
+      type: Date,
+      default: null,
+      select: false,
+    },
+
     profilePhoto: {
       type: String,
       default: null,
@@ -197,6 +209,8 @@ const userSchema = new mongoose.Schema(
         delete ret.password;
         delete ret.loginAttempts;
         delete ret.lockedUntil;
+        delete ret.passwordResetToken;
+        delete ret.passwordResetExpires;
         delete ret.governmentIdNumber;
         delete ret.governmentIdUrl;
         delete ret.governmentIdPublicId;

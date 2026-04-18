@@ -123,6 +123,12 @@ export default function Login() {
             {loading ? 'Signing in…' : adminMode ? 'Admin Sign In' : 'Sign In'}
           </button>
 
+          {!adminMode && (
+            <p className="text-xs text-slate-300 text-right">
+              <Link to="/forgot-password" className="text-violet-300 hover:text-violet-200">Forgot password?</Link>
+            </p>
+          )}
+
           <p className="text-xs text-slate-400">
             Tip: For admin access, switch to <span className="font-semibold">Admin?</span> mode and enter your secret code.
             If login still fails with server error, start MongoDB and restart backend.

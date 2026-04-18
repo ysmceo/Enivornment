@@ -7,6 +7,8 @@ export const authService = {
   getMe:    ()                => api.get('/auth/me'),
   updateProfile: (data)       => api.put('/auth/update-profile', data),
   changePassword: (data)      => api.put('/auth/change-password', data),
+  forgotPassword: (data)      => api.post('/auth/forgot-password', data),
+  resetPassword: (data)       => api.post('/auth/reset-password', data),
   uploadGovernmentId: (file, idCardNumber)  => {
     const form = new FormData();
     form.append('governmentId', file);
