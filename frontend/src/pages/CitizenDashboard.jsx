@@ -207,6 +207,7 @@ export default function CitizenDashboard() {
   const hasSelfieForVerification = Boolean(user?.hasVerificationSelfie)
   const verificationProgressPercent =
     (hasGovernmentIdForVerification ? 50 : 0) + (hasSelfieForVerification ? 50 : 0)
+  const hasSubmittedBothVerificationItems = hasGovernmentIdForVerification && hasSelfieForVerification
   const liveStreamRestriction = useMemo(() => {
     if (canStartLiveStream) return ''
     if (user?.role !== 'user') {
@@ -610,9 +611,20 @@ export default function CitizenDashboard() {
                 {hasSelfieForVerification ? '✅ Selfie uploaded' : '⏳ Selfie pending'}
               </span>
               <span className={`text-xs px-2.5 py-1 rounded-full border ${user?.idVerificationStatus === 'pending' ? 'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-700' : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'}`}>
-                {user?.idVerificationStatus === 'pending' ? '🕵️ Admin review in progress' : '⏳ Waiting for both uploads'}
+                {hasSubmittedBothVerificationItems
+                  ? '✅ Both done — waiting on admin approval'
+                  : '⏳ Waiting for both uploads'}
               </span>
             </div>
+
+            {hasSubmittedBothVerificationItems && user?.idVerificationStatus === 'pending' && (
+              <div className="mt-3 rounded-lg border border-emerald-300/80 dark:border-emerald-700/70 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2">
+                <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                  ✅ Both done — waiting on admin approval.
+                </p>
+              </div>
+            )}
+
             {user?.idVerificationStatus === 'rejected' && user?.idRejectionReason && (
               <p className="text-xs text-rose-700 dark:text-rose-300 mt-2">
                 Last rejection reason: {user.idRejectionReason}
