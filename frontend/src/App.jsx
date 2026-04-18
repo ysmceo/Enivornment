@@ -2,23 +2,39 @@ import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import ProtectedRoute from './components/ProtectedRoute'
 
-const Landing = lazy(() => import('./pages/Landing'))
-const Login = lazy(() => import('./pages/Login'))
-const Register = lazy(() => import('./pages/Register'))
-const Preview = lazy(() => import('./pages/Preview'))
-const CitizenDashboard = lazy(() => import('./pages/CitizenDashboard'))
-const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
-const AdminReports = lazy(() => import('./pages/AdminReports'))
-const AdminUsers = lazy(() => import('./pages/AdminUsers'))
-const AdminVerification = lazy(() => import('./pages/AdminVerification'))
-const AdminEmergencyContacts = lazy(() => import('./pages/AdminEmergencyContacts.jsx'))
-const EmergencyDirectoryPage = lazy(() => import('./pages/EmergencyDirectoryPageV2'))
-const LiveHomePage = lazy(() => import('./pages/LiveHomePage.jsx'))
-const AdminLiveViewerPage = lazy(() => import('./pages/AdminLiveViewerPage.jsx'))
-const NewsCategoryPage = lazy(() => import('./pages/NewsCategoryPage.jsx'))
-const NewsReaderPage = lazy(() => import('./pages/NewsReaderPage.jsx'))
-const SOSPage = lazy(() => import('./pages/SOSPage.jsx'))
-const CrimeAnalytics = lazy(() => import('./pages/CrimeAnalytics.jsx'))
+const lazyWithReload = (importer) =>
+  lazy(() =>
+    importer().catch((err) => {
+      const message = String(err?.message || '')
+      const isChunkLoadError =
+        message.includes('Failed to fetch dynamically imported module') ||
+        message.includes('Importing a module script failed')
+
+      if (isChunkLoadError && typeof window !== 'undefined') {
+        window.location.reload()
+      }
+
+      throw err
+    })
+  )
+
+const Landing = lazyWithReload(() => import('./pages/Landing'))
+const Login = lazyWithReload(() => import('./pages/Login'))
+const Register = lazyWithReload(() => import('./pages/Register'))
+const Preview = lazyWithReload(() => import('./pages/Preview'))
+const CitizenDashboard = lazyWithReload(() => import('./pages/CitizenDashboard'))
+const AdminDashboard = lazyWithReload(() => import('./pages/AdminDashboard'))
+const AdminReports = lazyWithReload(() => import('./pages/AdminReports'))
+const AdminUsers = lazyWithReload(() => import('./pages/AdminUsers'))
+const AdminVerification = lazyWithReload(() => import('./pages/AdminVerification'))
+const AdminEmergencyContacts = lazyWithReload(() => import('./pages/AdminEmergencyContacts.jsx'))
+const EmergencyDirectoryPage = lazyWithReload(() => import('./pages/EmergencyDirectoryPageV2'))
+const LiveHomePage = lazyWithReload(() => import('./pages/LiveHomePage.jsx'))
+const AdminLiveViewerPage = lazyWithReload(() => import('./pages/AdminLiveViewerPage.jsx'))
+const NewsCategoryPage = lazyWithReload(() => import('./pages/NewsCategoryPage.jsx'))
+const NewsReaderPage = lazyWithReload(() => import('./pages/NewsReaderPage.jsx'))
+const SOSPage = lazyWithReload(() => import('./pages/SOSPage.jsx'))
+const CrimeAnalytics = lazyWithReload(() => import('./pages/CrimeAnalytics.jsx'))
 
 const RouteFallback = () => (
   <main className="max-w-5xl mx-auto p-6">

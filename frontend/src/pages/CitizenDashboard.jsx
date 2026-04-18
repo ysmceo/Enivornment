@@ -410,10 +410,10 @@ export default function CitizenDashboard() {
 
   return (
     <main className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
-      <header className="card p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <header className="card p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-indigo-600/15 via-violet-600/10 to-sky-600/10 border border-indigo-400/30">
         <div>
-          <h1 className="text-2xl font-bold">Citizen Safety Dashboard</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-700 via-violet-700 to-sky-700 dark:from-indigo-300 dark:via-violet-300 dark:to-sky-300 bg-clip-text text-transparent">Citizen Safety Dashboard</h1>
+          <p className="text-sm text-slate-600 dark:text-slate-300">
             Welcome, {user?.name}. Route incidents by state and upload evidence securely.
           </p>
         </div>
@@ -451,21 +451,21 @@ export default function CitizenDashboard() {
       ) : (
         <>
           <section className="grid sm:grid-cols-3 gap-4">
-            <div className="card p-4 border-l-4 border-indigo-500">
+            <div className="card p-4 border-l-4 border-indigo-500 bg-gradient-to-br from-indigo-500/10 to-transparent">
               <p className="text-sm text-slate-500">Total Reports</p>
               <p className="text-2xl font-bold text-slate-900 dark:text-white">{reports.length}</p>
             </div>
-            <div className="card p-4 border-l-4 border-amber-500">
+            <div className="card p-4 border-l-4 border-amber-500 bg-gradient-to-br from-amber-500/10 to-transparent">
               <p className="text-sm text-slate-500">Pending</p>
               <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{statusCount.pending}</p>
             </div>
-            <div className="card p-4 border-l-4 border-emerald-500">
+            <div className="card p-4 border-l-4 border-emerald-500 bg-gradient-to-br from-emerald-500/10 to-transparent">
               <p className="text-sm text-slate-500">Resolved</p>
               <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{statusCount.resolved}</p>
             </div>
           </section>
 
-          <section className="card p-4 sm:p-5 space-y-4">
+          <section className="card p-4 sm:p-5 space-y-4 border border-sky-500/25 bg-gradient-to-br from-sky-500/10 via-transparent to-violet-500/10">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <h2 className="text-lg font-semibold">Nigeria Incident Map</h2>
@@ -518,7 +518,7 @@ export default function CitizenDashboard() {
           </section>
 
           <section className="grid lg:grid-cols-3 gap-6">
-            <form onSubmit={submitReport} className="lg:col-span-2 card p-5 space-y-4">
+            <form onSubmit={submitReport} className="lg:col-span-2 card p-5 space-y-4 border border-violet-500/25 bg-gradient-to-br from-violet-500/10 via-transparent to-indigo-500/10">
               <h2 className="text-lg font-semibold">{t('submitReport', 'Submit Incident Report')}</h2>
 
               <div className="grid sm:grid-cols-2 gap-3">
@@ -661,7 +661,7 @@ export default function CitizenDashboard() {
                     {contacts.slice(0, 6).map((contact) => (
                       <div key={contact._id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-2.5">
                         <p className="text-sm font-semibold">{contact.agencyName}</p>
-                        <p className="text-xs text-slate-500 capitalize">{contact.type.replace('_', ' ')}</p>
+                        <p className="text-xs text-slate-500 capitalize">{String(contact.type || contact.authorityType || 'other').replace('_', ' ')}</p>
                         <a className="text-sm text-indigo-600 mt-1 inline-flex items-center gap-1" href={`tel:${contact.phoneNumber}`}>
                           <Phone className="w-3.5 h-3.5" /> {contact.phoneNumber}
                         </a>
