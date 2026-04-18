@@ -80,7 +80,7 @@ export default function CitizenDashboard() {
   const [weather, setWeather] = useState(null)
   const [weatherLoading, setWeatherLoading] = useState(false)
   const [geoResolving, setGeoResolving] = useState(false)
-  const [queuedCount, setQueuedCount] = useState(() => getOfflineQueue().length)
+  const [queuedCount, setQueuedCount] = useState(() => getOfflineQueue()?.length || 0)
   const [configHealth, setConfigHealth] = useState(null)
 
   const previewLat = Number(form.lat)
@@ -400,7 +400,7 @@ export default function CitizenDashboard() {
     }
 
     window.addEventListener('online', handleOnline)
-    if (navigator.onLine && getOfflineQueue().length > 0) {
+    if (navigator.onLine && (getOfflineQueue()?.length || 0) > 0) {
       syncQueuedReports().catch(() => {})
     }
 

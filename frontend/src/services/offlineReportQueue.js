@@ -8,7 +8,10 @@ const safeParse = (value, fallback) => {
   }
 }
 
-export const getOfflineQueue = () => safeParse(localStorage.getItem(OFFLINE_QUEUE_KEY), [])
+export const getOfflineQueue = () => {
+  const parsed = safeParse(localStorage.getItem(OFFLINE_QUEUE_KEY), [])
+  return Array.isArray(parsed) ? parsed : []
+}
 
 export const saveOfflineQueue = (queue) => {
   localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue))
