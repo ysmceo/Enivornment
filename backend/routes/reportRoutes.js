@@ -2,7 +2,7 @@ const express = require('express');
 const {
   createReport, getMyReports, getReportById, updateReport, deleteReport, getMapReports, getMapSummary,
 } = require('../controllers/reportController');
-const { protect, requireVerified } = require('../middleware/auth');
+const { protect } = require('../middleware/auth');
 const { uploadLimiter }            = require('../middleware/rateLimiter');
 const { uploadMedia, handleUpload } = require('../middleware/upload');
 const validate                     = require('../middleware/validate');
@@ -13,10 +13,9 @@ const router = express.Router();
 // All report routes require authentication
 router.use(protect);
 
-// Submit a new report (requires verified ID + upload rate limit)
+// Submit a new report (authenticated users; media upload is rate-limited)
 router.post(
   '/',
-  requireVerified,
   uploadLimiter,
   handleUpload(uploadMedia),
   reportValidation,

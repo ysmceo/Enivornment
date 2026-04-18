@@ -142,7 +142,7 @@ export default function App() {
             <Route
               path="/live/start"
               element={
-                <ProtectedRoute role="user" verified>
+                <ProtectedRoute role="user">
                   <LiveStartPage />
                 </ProtectedRoute>
               }

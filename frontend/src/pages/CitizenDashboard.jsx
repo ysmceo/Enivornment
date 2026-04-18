@@ -202,7 +202,7 @@ export default function CitizenDashboard() {
     return map
   }, [reports])
 
-  const canStartLiveStream = user?.role === 'user' && user?.idVerificationStatus === 'verified'
+  const canStartLiveStream = user?.role === 'user'
   const hasGovernmentIdForVerification = Boolean(user?.hasGovernmentId)
   const hasSelfieForVerification = Boolean(user?.hasVerificationSelfie)
   const verificationProgressPercent =
@@ -210,9 +210,9 @@ export default function CitizenDashboard() {
   const liveStreamRestriction = useMemo(() => {
     if (canStartLiveStream) return ''
     if (user?.role !== 'user') {
-      return 'Live streaming can only be started from a verified citizen user account.'
+      return 'Live streaming can only be started from a citizen user account.'
     }
-    return 'Complete ID verification to start live streaming.'
+    return 'Live streaming is available to user accounts only.'
   }, [canStartLiveStream, user?.idVerificationStatus, user?.role])
 
   const setField = (k, v) => setForm((p) => ({ ...p, [k]: v }))
@@ -591,9 +591,9 @@ export default function CitizenDashboard() {
 
       {user?.idVerificationStatus !== 'verified' && (
         <section className="card p-4 space-y-3 border border-amber-300/70 dark:border-amber-700/60 bg-amber-50/60 dark:bg-amber-900/20">
-          <h3 className="font-semibold text-amber-800 dark:text-amber-300">Identity verification required</h3>
+          <h3 className="font-semibold text-amber-800 dark:text-amber-300">Identity verification (recommended)</h3>
           <p className="text-sm text-slate-700 dark:text-slate-300">
-            You must upload both a valid government ID and a recent selfie, then wait for admin approval before submitting incident reports.
+            Uploading a government ID + selfie helps admins validate submissions faster, but you can already upload pictures/videos, submit reports, and start live video as a user.
             Current status: <span className="font-semibold capitalize">{user?.idVerificationStatus || 'none'}</span>
             <span className="ml-2 inline-flex items-center rounded-full border border-indigo-300 dark:border-indigo-700 bg-indigo-100 dark:bg-indigo-900/30 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 dark:text-indigo-300">
               {verificationProgressPercent}% complete
