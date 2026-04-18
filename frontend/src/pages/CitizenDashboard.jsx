@@ -64,6 +64,13 @@ const initialForm = {
   isAnonymous: false,
 }
 
+const FORM_STEPS = [
+  { id: 1, title: 'Incident Basics' },
+  { id: 2, title: 'Location & Time' },
+  { id: 3, title: 'Details & Evidence' },
+  { id: 4, title: 'Review & Submit' },
+]
+
 export default function CitizenDashboard() {
   const { user, logout } = useAuth()
   const { t } = useLanguage()
@@ -82,6 +89,7 @@ export default function CitizenDashboard() {
   const [geoResolving, setGeoResolving] = useState(false)
   const [queuedCount, setQueuedCount] = useState(() => getOfflineQueue()?.length || 0)
   const [configHealth, setConfigHealth] = useState(null)
+  const [formStep, setFormStep] = useState(1)
   const syncInProgressRef = useRef(false)
 
   const previewLat = Number(form.lat)
@@ -320,8 +328,62 @@ export default function CitizenDashboard() {
     }
   }
 
-  const submitReport = async (e) => {
+  const validateStep = (step) => {
+    if (step === 1) {
+      if (!String(form.title || '').trim()) {
+        toast.error('Please enter a report title')
+        return false
+      }
+      return true
+    }
+
+    if (step === 2) {
+      const incidentDate = new Date(form.incidentDate)
+      if (!form.incidentDate || Number.isNaN(incidentDate.getTime())) {
+        toast.error('Please select a valid incident date and time')
+        return false
+      }
+      if (!String(form.address || '').trim()) {
+        toast.error('Please enter an address or landmark')
+        return false
+      }
+      return true
+    }
+
+    if (step === 3) {
+      if (!String(form.description || '').trim()) {
+        toast.error('Please enter a report description')
+        return false
+      }
+      return true
+    }
+
+    return true
+  }
+
+  const goToNextStep = () => {
+    if (!validateStep(formStep)) return
+    setFormStep((prev) => Math.min(prev + 1, FORM_STEPS.length))
+  }
+
+  const goToPrevStep = () => {
+    setFormStep((prev) => Math.max(prev - 1, 1))
+  }
+
+  const handleReportFormSubmit = async (e) => {
     e.preventDefault()
+
+    if (formStep < FORM_STEPS.length) {
+      goToNextStep()
+      return
+    }
+
+    if (!validateStep(formStep)) return
+
+    await submitReport()
+  }
+
+  const submitReport = async () => {
     try {
       const incidentDate = new Date(form.incidentDate)
       if (!form.incidentDate || Number.isNaN(incidentDate.getTime())) {
@@ -347,6 +409,7 @@ export default function CitizenDashboard() {
       toast.success('Incident report submitted successfully')
 
       setForm((prev) => ({ ...initialForm, state: prev.state }))
+      setFormStep(1)
       setFiles([])
       await fetchReports()
       await fetchMapData(form.state)
@@ -532,137 +595,193 @@ export default function CitizenDashboard() {
           </section>
 
           <section className="grid lg:grid-cols-3 gap-6">
-            <form onSubmit={submitReport} className="lg:col-span-2 card p-5 space-y-4 border border-violet-500/25 bg-gradient-to-br from-violet-500/10 via-transparent to-indigo-500/10">
+            <form onSubmit={handleReportFormSubmit} className="lg:col-span-2 card p-5 space-y-4 border border-violet-500/25 bg-gradient-to-br from-violet-500/10 via-transparent to-indigo-500/10">
               <h2 className="text-lg font-semibold">{t('submitReport', 'Submit Incident Report')}</h2>
 
-              <div className="grid sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Title</label>
-                  <input className="input" value={form.title} onChange={(e) => setField('title', e.target.value)} required />
-                </div>
-                <div>
-                  <label className="label">Category</label>
-                  <select className="select" value={form.category} onChange={(e) => setField('category', e.target.value)}>
-                    {(meta.incidentCategories || []).map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="label">State</label>
-                  <select
-                    className="select"
-                    value={form.state}
-                    onChange={async (e) => {
-                      const newState = e.target.value
-                      setField('state', newState)
-                      await fetchContacts(newState)
-                      await fetchMapData(newState)
-                    }}
+              <div className="flex flex-wrap gap-2">
+                {FORM_STEPS.map((step) => (
+                  <span
+                    key={step.id}
+                    className={`text-xs px-2.5 py-1 rounded-full border ${
+                      formStep === step.id
+                        ? 'bg-indigo-600 text-white border-indigo-600'
+                        : formStep > step.id
+                          ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700'
+                          : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+                    }`}
                   >
-                    {(meta.states || []).map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Severity</label>
-                  <select className="select" value={form.severity} onChange={(e) => setField('severity', e.target.value)}>
-                    {(meta.incidentSeverities || ['low', 'medium', 'high', 'critical']).map((severity) => (
-                      <option key={severity} value={severity}>{severity}</option>
-                    ))}
-                  </select>
-                </div>
+                    {step.id}. {step.title}
+                  </span>
+                ))}
               </div>
 
-              <div className="grid sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Incident Date & Time</label>
-                  <input
-                    className="input"
-                    type="datetime-local"
-                    value={form.incidentDate}
-                    onChange={(e) => setField('incidentDate', e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
+              {formStep === 1 && (
+                <>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="label">Title</label>
+                      <input className="input" value={form.title} onChange={(e) => setField('title', e.target.value)} required />
+                    </div>
+                    <div>
+                      <label className="label">Category</label>
+                      <select className="select" value={form.category} onChange={(e) => setField('category', e.target.value)}>
+                        {(meta.incidentCategories || []).map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                  </div>
 
-              <div>
-                <label className="label">Address / Landmark</label>
-                <input className="input" value={form.address} onChange={(e) => setField('address', e.target.value)} required />
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <button type="button" className="btn-secondary text-xs" onClick={handleFindCoordinates} disabled={geoResolving}>
-                    {geoResolving ? 'Resolving…' : 'Find Coordinates from Address'}
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="label">State</label>
+                      <select
+                        className="select"
+                        value={form.state}
+                        onChange={async (e) => {
+                          const newState = e.target.value
+                          setField('state', newState)
+                          await fetchContacts(newState)
+                          await fetchMapData(newState)
+                        }}
+                      >
+                        {(meta.states || []).map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="label">Severity</label>
+                      <select className="select" value={form.severity} onChange={(e) => setField('severity', e.target.value)}>
+                        {(meta.incidentSeverities || ['low', 'medium', 'high', 'critical']).map((severity) => (
+                          <option key={severity} value={severity}>{severity}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {formStep === 2 && (
+                <>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="label">Incident Date & Time</label>
+                      <input
+                        className="input"
+                        type="datetime-local"
+                        value={form.incidentDate}
+                        onChange={(e) => setField('incidentDate', e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="label">Address / Landmark</label>
+                    <input className="input" value={form.address} onChange={(e) => setField('address', e.target.value)} required />
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button type="button" className="btn-secondary text-xs" onClick={handleFindCoordinates} disabled={geoResolving}>
+                        {geoResolving ? 'Resolving…' : 'Find Coordinates from Address'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="label">Latitude</label>
+                      <input className="input" value={form.lat} onChange={(e) => setField('lat', e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="label">Longitude</label>
+                      <input className="input" value={form.lng} onChange={(e) => setField('lng', e.target.value)} />
+                    </div>
+                  </div>
+
+                  <button type="button" onClick={useCurrentLocation} className="btn-secondary">
+                    <MapPin className="w-4 h-4" /> Use Current GPS Location
                   </button>
+
+                  <button type="button" onClick={handleAutofillAddress} className="btn-secondary" disabled={geoResolving}>
+                    <MapPin className="w-4 h-4" /> {geoResolving ? 'Autofilling Address…' : 'Autofill Address from Coordinates'}
+                  </button>
+
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 bg-slate-50/70 dark:bg-slate-900/40 space-y-1.5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Preview</p>
+                    <p className="text-sm text-slate-700 dark:text-slate-300">
+                      Current Date & Time:{' '}
+                      <span className="font-semibold text-slate-900 dark:text-white">
+                        {now.toLocaleString()}
+                      </span>
+                    </p>
+                    <p className="text-sm text-slate-700 dark:text-slate-300">
+                      Incident Date & Time:{' '}
+                      <span className="font-semibold text-slate-900 dark:text-white">
+                        {form.incidentDate ? new Date(form.incidentDate).toLocaleString() : 'Not selected'}
+                      </span>
+                    </p>
+                    <p className="text-sm text-slate-700 dark:text-slate-300">
+                      Weather:{' '}
+                      <span className="font-semibold text-slate-900 dark:text-white">
+                        {!hasPreviewCoordinates
+                          ? 'Add latitude and longitude to preview weather'
+                          : weatherLoading
+                            ? 'Fetching weather…'
+                            : weather
+                              ? `${weather.label} · ${weather.temperature}°C (feels ${weather.feelsLike}°C) · Wind ${weather.windSpeed} km/h`
+                              : 'Weather unavailable'}
+                      </span>
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {formStep === 3 && (
+                <>
+                  <div>
+                    <label className="label">Description</label>
+                    <textarea className="textarea" rows={5} value={form.description} onChange={(e) => setField('description', e.target.value)} required />
+                  </div>
+
+                  <div>
+                    <label className="label">Evidence Upload (photos/videos)</label>
+                    <input type="file" multiple accept="image/*,video/*" onChange={(e) => setFiles(Array.from(e.target.files || []))} className="input" />
+                    <p className="text-xs text-slate-500 mt-1">{files.length} file(s) selected</p>
+                  </div>
+
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={form.isAnonymous} onChange={(e) => setField('isAnonymous', e.target.checked)} />
+                    Submit anonymously
+                  </label>
+                </>
+              )}
+
+              {formStep === 4 && (
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 bg-white/70 dark:bg-slate-900/30 space-y-2 text-sm">
+                  <p><span className="font-semibold">Title:</span> {form.title || 'N/A'}</p>
+                  <p><span className="font-semibold">Category:</span> {form.category}</p>
+                  <p><span className="font-semibold">State:</span> {form.state}</p>
+                  <p><span className="font-semibold">Severity:</span> {form.severity}</p>
+                  <p><span className="font-semibold">Incident Date:</span> {form.incidentDate ? new Date(form.incidentDate).toLocaleString() : 'N/A'}</p>
+                  <p><span className="font-semibold">Address:</span> {form.address || 'N/A'}</p>
+                  <p><span className="font-semibold">Coordinates:</span> {form.lat || '0'}, {form.lng || '0'}</p>
+                  <p><span className="font-semibold">Description:</span> {form.description || 'N/A'}</p>
+                  <p><span className="font-semibold">Files selected:</span> {files.length}</p>
+                  <p><span className="font-semibold">Anonymous:</span> {form.isAnonymous ? 'Yes' : 'No'}</p>
                 </div>
+              )}
+
+              <div className="flex items-center justify-between gap-2 pt-2">
+                <button type="button" onClick={goToPrevStep} className="btn-secondary" disabled={formStep === 1 || submitting}>
+                  Prev
+                </button>
+
+                {formStep < FORM_STEPS.length ? (
+                  <button type="button" onClick={goToNextStep} className="btn-primary" disabled={submitting}>
+                    Next
+                  </button>
+                ) : (
+                  <button disabled={submitting} type="submit" className="btn-primary">
+                    <AlertTriangle className="w-4 h-4" /> {submitting ? 'Submitting…' : 'Submit Incident'}
+                  </button>
+                )}
               </div>
-
-              <div className="grid sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Latitude</label>
-                  <input className="input" value={form.lat} onChange={(e) => setField('lat', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Longitude</label>
-                  <input className="input" value={form.lng} onChange={(e) => setField('lng', e.target.value)} />
-                </div>
-              </div>
-
-              <button type="button" onClick={useCurrentLocation} className="btn-secondary">
-                <MapPin className="w-4 h-4" /> Use Current GPS Location
-              </button>
-
-              <button type="button" onClick={handleAutofillAddress} className="btn-secondary" disabled={geoResolving}>
-                <MapPin className="w-4 h-4" /> {geoResolving ? 'Autofilling Address…' : 'Autofill Address from Coordinates'}
-              </button>
-
-              <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 bg-slate-50/70 dark:bg-slate-900/40 space-y-1.5">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Preview</p>
-                <p className="text-sm text-slate-700 dark:text-slate-300">
-                  Current Date & Time:{' '}
-                  <span className="font-semibold text-slate-900 dark:text-white">
-                    {now.toLocaleString()}
-                  </span>
-                </p>
-                <p className="text-sm text-slate-700 dark:text-slate-300">
-                  Incident Date & Time:{' '}
-                  <span className="font-semibold text-slate-900 dark:text-white">
-                    {form.incidentDate ? new Date(form.incidentDate).toLocaleString() : 'Not selected'}
-                  </span>
-                </p>
-                <p className="text-sm text-slate-700 dark:text-slate-300">
-                  Weather:{' '}
-                  <span className="font-semibold text-slate-900 dark:text-white">
-                    {!hasPreviewCoordinates
-                      ? 'Add latitude and longitude to preview weather'
-                      : weatherLoading
-                        ? 'Fetching weather…'
-                        : weather
-                          ? `${weather.label} · ${weather.temperature}°C (feels ${weather.feelsLike}°C) · Wind ${weather.windSpeed} km/h`
-                          : 'Weather unavailable'}
-                  </span>
-                </p>
-              </div>
-
-              <div>
-                <label className="label">Description</label>
-                <textarea className="textarea" rows={5} value={form.description} onChange={(e) => setField('description', e.target.value)} required />
-              </div>
-
-              <div>
-                <label className="label">Evidence Upload (photos/videos)</label>
-                <input type="file" multiple accept="image/*,video/*" onChange={(e) => setFiles(Array.from(e.target.files || []))} className="input" />
-                <p className="text-xs text-slate-500 mt-1">{files.length} file(s) selected</p>
-              </div>
-
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={form.isAnonymous} onChange={(e) => setField('isAnonymous', e.target.checked)} />
-                Submit anonymously
-              </label>
-
-              <button disabled={submitting} type="submit" className="btn-primary w-full">
-                <AlertTriangle className="w-4 h-4" /> {submitting ? 'Submitting…' : 'Submit Incident'}
-              </button>
             </form>
 
             <aside className="space-y-4">
