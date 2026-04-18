@@ -225,6 +225,55 @@ const buildAdminPayload = (body = {}, userId = null) => {
   return payload;
 };
 
+const escapeCsvCell = (value) => {
+  if (value === null || value === undefined) return '';
+  const str = String(value);
+  return /[",\n\r]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+};
+
+const parseCsvLine = (line) => {
+  const fields = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === ',' && !inQuotes) {
+      fields.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+
+  fields.push(current);
+  return fields.map((cell) => cell.trim());
+};
+
+const parseCsvText = (csvText = '') => {
+  const text = String(csvText || '').replace(/^\uFEFF/, '').trim();
+  if (!text) return [];
+  const lines = text.split(/\r?\n/).filter((line) => line.trim());
+  if (lines.length < 2) return [];
+
+  const headers = parseCsvLine(lines[0]);
+  return lines.slice(1).map((line) => {
+    const cells = parseCsvLine(line);
+    const row = {};
+    headers.forEach((header, index) => {
+      row[header] = cells[index] ?? '';
+    });
+    return row;
+  });
+};
+
 const getEmergencyDirectory = async (req, res) => {
   try {
     const lat = parseNumeric(req.query.lat ?? req.query.latitude);
@@ -415,6 +464,164 @@ const adminListEmergencyContacts = async (req, res) => {
   }
 };
 
+const adminExportEmergencyContactsCsv = async (req, res) => {
+  try {
+    const filter = {};
+    const stateFilter = normalizeStateName(req.query.state);
+    const authorityTypeFilter = normalizeAuthorityTypeQuery(req.query.authorityType || req.query.type);
+
+    if (stateFilter) filter.state = stateFilter;
+    if (authorityTypeFilter) filter.authorityType = authorityTypeFilter;
+    if (req.query.region && req.query.region !== 'all') filter.region = req.query.region;
+    if (req.query.active === 'true' || req.query.active === 'false') filter.active = req.query.active === 'true';
+    if (req.query.verifiedOnly === 'true' || req.query.verifiedOnly === 'false') filter.isVerifiedOfficial = req.query.verifiedOnly === 'true';
+
+    const contacts = await EmergencyContact.find(filter).sort({ state: 1, authorityType: 1, agency: 1 }).lean();
+    const lines = [CSV_HEADERS.join(',')];
+
+    contacts.forEach((rawContact) => {
+      const contact = normalizeContactOutput(rawContact);
+      const lat = contact?.location?.coordinates?.[1] ?? '';
+      const lng = contact?.location?.coordinates?.[0] ?? '';
+      const row = [
+        contact._id,
+        contact.name,
+        contact.agency,
+        contact.state,
+        contact.region,
+        contact.authorityType,
+        contact.category,
+        contact.phonePrimary,
+        contact.phoneSecondary,
+        (contact.phoneNumbers || []).join('|'),
+        contact.email,
+        contact.address,
+        contact.active,
+        contact.isVerifiedOfficial,
+        contact.sourceUrl,
+        contact.lastVerifiedAt ? new Date(contact.lastVerifiedAt).toISOString() : '',
+        lat,
+        lng,
+        contact.notes,
+      ].map(escapeCsvCell);
+      lines.push(row.join(','));
+    });
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="emergency-contacts-${stamp}.csv"`);
+    res.status(200).send(`\uFEFF${lines.join('\n')}`);
+  } catch (_error) {
+    res.status(500).json({ success: false, message: 'Server error exporting emergency contacts CSV.' });
+  }
+};
+
+const adminImportEmergencyContactsCsv = async (req, res) => {
+  try {
+    const csv = String(req.body?.csv || '');
+    const mode = String(req.body?.mode || 'upsert').toLowerCase();
+    if (!csv.trim()) return res.status(400).json({ success: false, message: 'CSV content is required.' });
+
+    const rows = parseCsvText(csv);
+    if (!rows.length) return res.status(400).json({ success: false, message: 'CSV has no data rows.' });
+
+    const operations = [];
+    let skipped = 0;
+
+    rows.forEach((row) => {
+      const phoneNumbers = String(row.phoneNumbers || '')
+        .split('|')
+        .map((item) => item.trim())
+        .filter(Boolean);
+
+      const payload = buildAdminPayload({
+        name: row.name,
+        agency: row.agency,
+        state: normalizeStateName(row.state),
+        region: row.region,
+        authorityType: row.authorityType,
+        category: row.category,
+        phonePrimary: row.phonePrimary,
+        phoneSecondary: row.phoneSecondary,
+        phoneNumbers,
+        email: row.email,
+        address: row.address,
+        sourceUrl: row.sourceUrl,
+        notes: row.notes,
+        active: parseBoolean(row.active, true),
+        isVerifiedOfficial: parseBoolean(row.isVerifiedOfficial, true),
+        lat: row.lat,
+        lng: row.lng,
+      }, req.user?._id);
+
+      if (!payload.name || !payload.agency || !payload.state || !payload.phonePrimary) {
+        skipped += 1;
+        return;
+      }
+
+      const identifier = String(row._id || '').trim();
+      const filter = identifier
+        ? { _id: identifier }
+        : {
+            state: payload.state,
+            agency: payload.agency,
+            authorityType: payload.authorityType,
+            phonePrimary: payload.phonePrimary,
+          };
+
+      operations.push({
+        updateOne: {
+          filter,
+          update: { $set: payload },
+          upsert: true,
+        },
+      });
+    });
+
+    if (!operations.length) {
+      return res.status(400).json({ success: false, message: 'No valid CSV rows were found to import.', skipped });
+    }
+
+    if (mode === 'replace') await EmergencyContact.deleteMany({});
+
+    const result = await EmergencyContact.bulkWrite(operations, { ordered: false });
+
+    await createAuditLog({
+      req,
+      actor: req.user,
+      action: 'emergency_contact.csv_import',
+      entityType: 'emergency_contact',
+      metadata: {
+        mode,
+        rows: rows.length,
+        operations: operations.length,
+        skipped,
+        inserted: result.upsertedCount || 0,
+        modified: result.modifiedCount || 0,
+      },
+    });
+
+    const io = req.app.get('io');
+    if (io) io.emit('emergency-directory:updated', { action: 'csv_import', mode });
+
+    res.status(200).json({
+      success: true,
+      message: 'Emergency contacts CSV import completed.',
+      summary: {
+        mode,
+        rows: rows.length,
+        operations: operations.length,
+        skipped,
+        inserted: result.upsertedCount || 0,
+        modified: result.modifiedCount || 0,
+        matched: result.matchedCount || 0,
+      },
+    });
+  } catch (_error) {
+    res.status(500).json({ success: false, message: 'Server error importing emergency contacts CSV.' });
+  }
+};
+
 const adminCreateEmergencyContact = async (req, res) => {
   try {
     const payload = buildAdminPayload(req.body, req.user?._id);
@@ -515,6 +722,8 @@ module.exports = {
   getEmergencyDirectory,
   getNearbyAuthorities,
   adminListEmergencyContacts,
+  adminExportEmergencyContactsCsv,
+  adminImportEmergencyContactsCsv,
   adminCreateEmergencyContact,
   adminUpdateEmergencyContact,
   adminDeleteEmergencyContact,

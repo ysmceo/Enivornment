@@ -40,7 +40,7 @@ export default function Badge({ status, label, dot = false, size = 'sm' }) {
   const sizeClass = size === 'xs' ? 'text-xs px-2 py-0.5' : 'text-xs px-2.5 py-1'
 
   return (
-    <span className={`inline-flex items-center gap-1.5 font-medium rounded-full border capitalize ${style} ${sizeClass}`}>
+    <span className={`inline-flex items-center gap-1.5 font-medium rounded-full border capitalize shadow-sm transition-all duration-200 ${style} ${sizeClass}`}>
       {dot && <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />}
       {label || status}
     </span>

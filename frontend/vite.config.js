@@ -44,8 +44,20 @@ export default defineConfig(({ mode }) => {
           manualChunks(id) {
             if (!id.includes('node_modules')) return;
 
+            if (id.includes('react-router-dom') || id.includes('@remix-run/router')) {
+              return 'router-vendor';
+            }
+
+            if (id.includes('leaflet') || id.includes('react-leaflet')) {
+              return 'maps-vendor';
+            }
+
             if (id.includes('socket.io-client') || id.includes('simple-peer')) {
               return 'realtime-vendor';
+            }
+
+            if (id.includes('lucide-react') || id.includes('date-fns') || id.includes('axios')) {
+              return 'ui-vendor';
             }
           },
         },

@@ -18,6 +18,11 @@ export default function Login() {
     e.preventDefault()
     const result = await login(adminMode ? form : { email: form.email, password: form.password })
     if (!result.success) {
+      if (result.message === 'Invalid admin secret code.' && !adminMode) {
+        setAdminMode(true)
+        toast.error('Admin login requires secret code. Admin mode has been enabled for you.')
+        return
+      }
       toast.error(result.message)
       return
     }
@@ -29,23 +34,29 @@ export default function Login() {
   }
 
   return (
-    <main className="min-h-screen grid place-items-center p-4">
-      <section className="card p-6 w-full max-w-md">
+    <main className="min-h-screen grid place-items-center p-4 relative overflow-hidden bg-slate-950">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -top-20 -left-16 w-72 h-72 bg-violet-500/25 blur-3xl rounded-full" />
+        <div className="absolute bottom-0 right-0 w-72 h-72 bg-sky-500/20 blur-3xl rounded-full" />
+        <div className="absolute top-1/3 right-1/4 w-64 h-64 bg-amber-500/15 blur-3xl rounded-full" />
+      </div>
+
+      <section className="card p-6 w-full max-w-md relative border border-violet-500/30 bg-gradient-to-br from-slate-900/95 to-slate-800/90 shadow-2xl shadow-violet-900/30">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">
+            <h1 className="text-2xl font-bold text-white">
               {adminMode ? 'Admin Sign In' : 'Sign In'}
             </h1>
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="text-sm text-slate-300 mt-1">
               {adminMode
                 ? 'Administrator access — restricted area.'
                 : 'Secure access to the civic incident platform.'}
             </p>
           </div>
           {adminMode && (
-            <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center">
-              <ShieldCheck className="w-5 h-5 text-indigo-600" />
+            <div className="w-10 h-10 bg-violet-500/20 rounded-xl flex items-center justify-center border border-violet-400/30">
+              <ShieldCheck className="w-5 h-5 text-violet-300" />
             </div>
           )}
         </div>
@@ -112,16 +123,16 @@ export default function Login() {
             {loading ? 'Signing in…' : adminMode ? 'Admin Sign In' : 'Sign In'}
           </button>
 
-          <p className="text-xs text-slate-400 dark:text-slate-500">
+          <p className="text-xs text-slate-400">
             Tip: For admin access, switch to <span className="font-semibold">Admin?</span> mode and enter your secret code.
             If login still fails with server error, start MongoDB and restart backend.
           </p>
         </form>
 
         <div className="mt-4 flex items-center justify-between">
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-slate-300">
             Don&apos;t have an account?{' '}
-            <Link to="/register" className="text-indigo-600">Register</Link>
+            <Link to="/register" className="text-violet-300 hover:text-violet-200">Register</Link>
           </p>
           <button
             type="button"
@@ -131,8 +142,8 @@ export default function Login() {
             }}
             className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-colors ${
               adminMode
-                ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300'
-                : 'text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800'
+                ? 'bg-violet-500/20 text-violet-200 border border-violet-400/30'
+                : 'text-slate-300 hover:text-violet-200 hover:bg-slate-700/60'
             }`}
           >
             {adminMode ? '← Regular Login' : 'Admin?'}

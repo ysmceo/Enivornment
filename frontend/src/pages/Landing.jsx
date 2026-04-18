@@ -1,476 +1,478 @@
-import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  Shield, Video, Lock, MapPin, Bell, BarChart3,
-  ChevronRight, CheckCircle, Menu, X, Sun, Moon,
-  ArrowRight, CloudSun, CalendarDays, Clock3,
+  ArrowRight,
+  Bell,
+  Building2,
+  Check,
+  ChevronRight,
+  Clock3,
+  Lock,
+  MapPin,
+  Shield,
+  Siren,
+  Video,
 } from 'lucide-react'
-import { useTheme } from '../context/ThemeContext'
 import NewsSection from '../components/NewsSection'
 
-const FEATURES = [
+const KPI_STATS = [
+  { value: '102k', label: 'Trusted Citizens', tone: 'from-emerald-500/20 to-emerald-900/10 border-emerald-500/30', valueColor: 'text-emerald-200' },
+  { value: '900M+', label: 'Evidence Data Secured', tone: 'from-sky-500/20 to-sky-900/10 border-sky-500/30', valueColor: 'text-sky-200' },
+  { value: '124k', label: 'Incidents Processed', tone: 'from-violet-500/20 to-violet-900/10 border-violet-500/30', valueColor: 'text-violet-200' },
+  { value: '99%', label: 'Successful Escalations', tone: 'from-amber-500/20 to-amber-900/10 border-amber-500/30', valueColor: 'text-amber-200' },
+]
+
+const CORE_FEATURES = [
   {
     icon: Shield,
     title: 'Anonymous Reporting',
-    description: 'Submit reports without revealing your identity. Your safety and privacy are our top priority at every step.',
-    color: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30',
+    description: 'Safely report sensitive incidents without exposing your identity to the public.',
+    iconTone: 'bg-emerald-500/20 text-emerald-300',
+    borderTone: 'hover:border-emerald-500/50',
+  },
+  {
+    icon: Lock,
+    title: 'Military-grade Security',
+    description: 'All evidence is encrypted in transit and at rest for trusted legal admissibility.',
+    iconTone: 'bg-violet-500/20 text-violet-300',
+    borderTone: 'hover:border-violet-500/50',
   },
   {
     icon: Video,
     title: 'Live Video Evidence',
-    description: 'Stream live video directly to law enforcement for real-time evidence capture that cannot be tampered with.',
-    color: 'text-violet-600 bg-violet-50 dark:bg-violet-900/30',
-  },
-  {
-    icon: Lock,
-    title: 'End-to-End Encryption',
-    description: 'All reports and media are encrypted using AES-256, both in transit and at rest — bank-grade security.',
-    color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/30',
-  },
-  {
-    icon: MapPin,
-    title: 'Precise Geolocation',
-    description: 'Accurate location data helps first responders reach the scene faster and coordinate efficiently.',
-    color: 'text-rose-600 bg-rose-50 dark:bg-rose-900/30',
+    description: 'Stream real-time evidence when immediate intervention is required.',
+    iconTone: 'bg-rose-500/20 text-rose-300',
+    borderTone: 'hover:border-rose-500/50',
   },
   {
     icon: Bell,
-    title: 'Real-time Updates',
-    description: 'Track your report status with instant push notifications at every stage of the investigation.',
-    color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/30',
+    title: 'Case Status Alerts',
+    description: 'Receive structured updates as reports move from intake to resolution.',
+    iconTone: 'bg-sky-500/20 text-sky-300',
+    borderTone: 'hover:border-sky-500/50',
+  },
+]
+
+const OPERATIONS = [
+  {
+    title: 'Emergency Operations',
+    subtitle: '24/7 incident escalation for severe threats and active emergencies.',
+    points: ['Rapid alert routing', 'Geo-aware triage', 'Agency handoff'],
+    tone: 'from-rose-500/15 to-transparent border-rose-500/25',
   },
   {
-    icon: BarChart3,
-    title: 'Analytics Dashboard',
-    description: 'Authorities get powerful analytics to identify crime patterns, allocate resources, and prevent future crimes.',
-    color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30',
+    title: 'Digital Evidence Desk',
+    subtitle: 'Secure evidence intake, timeline validation, and integrity preservation.',
+    points: ['Media chain of custody', 'Tamper detection', 'Investigation notes'],
+    tone: 'from-violet-500/15 to-transparent border-violet-500/25',
+  },
+  {
+    title: 'Community Safety Unit',
+    subtitle: 'Pattern monitoring and preventive engagement across neighborhoods.',
+    points: ['Hotspot trend analysis', 'Safety advisories', 'Local authority sync'],
+    tone: 'from-emerald-500/15 to-transparent border-emerald-500/25',
+  },
+  {
+    title: 'Crisis Coordination',
+    subtitle: 'Multi-agency communication for disasters, unrest, and major disruptions.',
+    points: ['Unified communication', 'Response dashboards', 'Cross-state escalation'],
+    tone: 'from-sky-500/15 to-transparent border-sky-500/25',
   },
 ]
 
-const STEPS = [
-  { step: '01', title: 'Create Account', desc: 'Register securely with your ID for verified reporting, or choose anonymous mode.' },
-  { step: '02', title: 'Submit Report', desc: 'Fill in incident details, attach photos or videos, and pin your location.' },
-  { step: '03', title: 'Track Progress', desc: 'Get real-time updates as authorities review and act on your report.' },
+const PROCESS = [
+  {
+    step: '01',
+    title: 'Send Your Report',
+    description: 'Submit details, optional media, and location in under two minutes.',
+    tone: 'bg-amber-500/15 text-amber-300',
+  },
+  {
+    step: '02',
+    title: 'Verification & Investigation',
+    description: 'Our workflow validates context, prioritizes severity, and alerts responders.',
+    tone: 'bg-violet-500/15 text-violet-300',
+  },
+  {
+    step: '03',
+    title: 'Coordinated Response',
+    description: 'Agencies receive structured evidence with real-time updates for action.',
+    tone: 'bg-emerald-500/15 text-emerald-300',
+  },
 ]
 
-const STATS = [
-  { value: '48,200+', label: 'Reports Submitted' },
-  { value: '94%', label: 'Resolution Rate' },
-  { value: '3.2 min', label: 'Avg Response Time' },
-  { value: '150+', label: 'Partner Agencies' },
+const ABOUT_MISSION =
+  'True Crime Hood is a community-driven crime reporting and public safety platform designed to help citizens report, track, and respond to criminal activity and environmental hazards in real time. Our mission is to strengthen public safety, support faster response from authorities, and give communities a trusted voice in protecting their neighborhoods.'
+
+const TIMELINE = [
+  {
+    year: '2019',
+    text: 'Platform launch with location-tagged reporting and evidence uploads for incidents such as theft, violence, flooding, pollution, and fire outbreaks.',
+  },
+  {
+    year: '2022',
+    text: 'Growing community trust through thousands of verified reports, anonymous reporting, and safety alerts that encouraged broader participation without fear.',
+  },
+  {
+    year: '2026',
+    text: 'Evolution into a smarter safety network with live incident mapping, AI-assisted report categorization, and admin response workflows that support faster intervention.',
+  },
 ]
 
-const TRUST = ['End-to-End Encrypted', 'Anonymous Reporting', 'GDPR Compliant', '99.9% Uptime']
-
-const BG_IMAGES = [
-  'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=1920&q=80',  // city skyline at night
-  'https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=1920&q=80',  // aerial city night
-  'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1920&q=80',  // security camera / CCTV
-  'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1920&q=80',  // night street
-  'https://images.unsplash.com/photo-1552832230-c0197dd311b5?w=1920&q=80',  // urban environment
+const ABOUT_HELP_POINTS = [
+  'Fast, accessible crime reporting with evidence upload',
+  'Real-time, location-based incident tracking',
+  'Improved community awareness of nearby threats and hazards',
+  'Anonymous reporting options to protect user safety',
+  'Verified and structured incident data to assist authorities',
+  'Faster response through structured alerts, including fire-related incidents',
 ]
+
+const TESTIMONIALS = [
+  {
+    quote: 'The platform helped us receive reliable, timestamped evidence much faster.',
+    author: 'Officer M. Yusuf',
+    role: 'Public Safety Desk',
+  },
+  {
+    quote: 'Anonymous reporting gave me confidence to submit critical information safely.',
+    author: 'Amina K.',
+    role: 'Citizen Reporter',
+  },
+  {
+    quote: 'The escalation flow and alerts reduce delay during high-priority incidents.',
+    author: 'Inspector Adaeze O.',
+    role: 'Emergency Coordination Unit',
+  },
+]
+
+const FOOTER_LINKS = {
+  Platform: [
+    { label: 'How it Works', to: '#process' },
+    { label: 'Emergency Directory', to: '/emergency' },
+    { label: 'News & Alerts', to: '#news' },
+    { label: 'Live Streaming', to: '/live' },
+  ],
+  Operations: [
+    { label: 'Incident Triage', to: '#operations' },
+    { label: 'Evidence Workflow', to: '#process' },
+    { label: 'Agency Access', to: '/login' },
+    { label: 'Security Standards', to: '#features' },
+  ],
+  'Quick Access': [
+    { label: 'Report Crime', to: '/register' },
+    { label: 'Sign In', to: '/login' },
+    { label: 'Create Account', to: '/register' },
+    { label: 'Admin Dashboard', to: '/admin' },
+  ],
+}
 
 export default function Landing() {
-  const { isDark, toggle } = useTheme()
-  const [mobileOpen, setMobileOpen] = useState(false)
-  const [bgIndex, setBgIndex] = useState(0)
-  const [now, setNow] = useState(new Date())
-  const [weather, setWeather] = useState({
-    temp: null,
-    wind: null,
-    code: null,
-    location: 'Abuja',
-    loading: true,
-  })
-
-  const NAV_LINKS = [
-    ['#home', 'Home'],
-    ['#stats', 'About'],
-    ['#features', 'Services'],
-    ['#how-it-works', 'More'],
-    ['#testimonials', 'Testimonials'],
-    ['#contact', 'Contact'],
-  ]
-
-  useEffect(() => {
-    const id = setInterval(() => setBgIndex((i) => (i + 1) % BG_IMAGES.length), 5000)
-    return () => clearInterval(id)
-  }, [])
-
-  useEffect(() => {
-    const clockId = setInterval(() => setNow(new Date()), 1000)
-    return () => clearInterval(clockId)
-  }, [])
-
-  useEffect(() => {
-    const fetchWeather = async (lat, lon, locationLabel) => {
-      try {
-        const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,wind_speed_10m`)
-        const data = await res.json()
-        setWeather({
-          temp: data?.current?.temperature_2m ?? null,
-          wind: data?.current?.wind_speed_10m ?? null,
-          code: data?.current?.weather_code ?? null,
-          location: locationLabel,
-          loading: false,
-        })
-      } catch {
-        setWeather((prev) => ({ ...prev, loading: false }))
-      }
-    }
-
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => fetchWeather(pos.coords.latitude, pos.coords.longitude, 'Your Area'),
-        () => fetchWeather(9.0765, 7.3986, 'Abuja'),
-        { timeout: 8000 }
-      )
-    } else {
-      fetchWeather(9.0765, 7.3986, 'Abuja')
-    }
-  }, [])
-
   return (
-    <div className="min-h-screen text-slate-900 dark:text-slate-50 font-sans">
-
-      {/* ─── Animated background slideshow ─── */}
-      {BG_IMAGES.map((src, i) => (
-        <div
-          key={src}
-          aria-hidden="true"
-          style={{
-            backgroundImage: `linear-gradient(rgba(2,6,23,0.70),rgba(2,6,23,0.70)),url(${src})`,
-            opacity: i === bgIndex ? 1 : 0,
-            transition: 'opacity 1.5s ease-in-out',
-          }}
-          className="fixed inset-0 -z-10 bg-cover bg-center"
-        />
-      ))}
-
-      {/* Progress dots */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2">
-        {BG_IMAGES.map((_, i) => (
-          <button
-            key={i}
-            onClick={() => setBgIndex(i)}
-            aria-label={`Background ${i + 1}`}
-            className="rounded-full transition-all duration-500 focus:outline-none"
-            style={{
-              width: i === bgIndex ? 24 : 8,
-              height: 8,
-              background: i === bgIndex ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.35)',
-            }}
-          />
-        ))}
+    <div className="min-h-screen bg-[#12100d] text-slate-100 relative overflow-hidden">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -top-20 -left-20 w-80 h-80 bg-violet-500/15 blur-3xl rounded-full" />
+        <div className="absolute top-1/3 -right-20 w-80 h-80 bg-sky-500/10 blur-3xl rounded-full" />
+        <div className="absolute bottom-10 left-1/4 w-96 h-96 bg-amber-500/10 blur-3xl rounded-full" />
       </div>
 
-      {/* ─── Navbar ─── */}
-      <header className="sticky top-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+      <div className="bg-gradient-to-r from-[#0e0c09] via-[#13100b] to-[#0e0c09] text-[11px] sm:text-xs text-slate-300 border-b border-amber-800/30 relative">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-9 flex items-center justify-between">
+          <p className="truncate">Secure civic intelligence for safer communities.</p>
+          <Link to="/register" className="text-amber-300 hover:text-amber-200 font-semibold">Start Reporting</Link>
+        </div>
+      </div>
+
+      <header className="sticky top-0 z-50 bg-[#12100d]/90 backdrop-blur-xl border-b border-amber-900/20">
         <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2">
-            <img src="/logo.webp" alt="True Hero Crime Report Logo" className="h-10 w-auto object-contain" />
-            <span className="text-base font-extrabold text-slate-900 dark:text-white">
-              TRUE <span className="text-indigo-600">HERO</span> CRIME REPORT
-            </span>
+          <Link to="/" className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 text-black flex items-center justify-center">
+              <Shield className="w-4 h-4" />
+            </div>
+            <span className="font-black tracking-tight text-sm sm:text-base text-amber-100">TRUE CRIME HOOD</span>
           </Link>
 
-          <div className="hidden md:flex items-center gap-7">
-            {NAV_LINKS.map(([href, label]) => (
-              <a key={href} href={href} className="text-sm text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors font-medium">
-                {label}
-              </a>
-            ))}
+          <div className="hidden md:flex items-center gap-6 text-sm">
+            <a href="#home" className="text-slate-300 hover:text-amber-300">Home</a>
+            <a href="#operations" className="text-slate-300 hover:text-amber-300">Operations</a>
+            <a href="#process" className="text-slate-300 hover:text-amber-300">How It Works</a>
+            <a href="#testimonials" className="text-slate-300 hover:text-amber-300">Testimonials</a>
+            <a href="#contact" className="text-slate-300 hover:text-amber-300">Contact</a>
           </div>
 
-          <div className="hidden md:flex items-center gap-2.5">
-            <button onClick={toggle} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" aria-label="Toggle theme">
-              {isDark ? <Sun className="w-4 h-4 text-slate-400" /> : <Moon className="w-4 h-4 text-slate-500" />}
-            </button>
-            <Link to="/login" className="btn-secondary text-sm px-4 py-2">Sign In</Link>
-            <Link to="/register" className="btn-primary text-sm px-4 py-2">Get Started <ArrowRight className="w-3.5 h-3.5" /></Link>
-          </div>
-
-          <div className="flex md:hidden items-center gap-1.5">
-            <button onClick={toggle} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
-              {isDark ? <Sun className="w-4 h-4 text-slate-400" /> : <Moon className="w-4 h-4" />}
-            </button>
-            <button onClick={() => setMobileOpen((p) => !p)} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
-              {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
+          <div className="flex items-center gap-2">
+            <Link to="/login" className="btn-secondary !bg-slate-900/80 !border-amber-800/40 !text-amber-100 hover:!bg-slate-800">Sign In</Link>
+            <Link to="/register" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-sm font-bold">
+              Get Started
+            </Link>
           </div>
         </nav>
-
-        {mobileOpen && (
-          <div className="md:hidden border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-4 space-y-2 animate-slide-up">
-            {NAV_LINKS.map(([href, label]) => (
-              <a key={href} href={href} onClick={() => setMobileOpen(false)} className="block py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-indigo-600">
-                {label}
-              </a>
-            ))}
-            <div className="pt-2 flex flex-col gap-2">
-              <Link to="/login" className="btn-secondary w-full" onClick={() => setMobileOpen(false)}>Sign In</Link>
-              <Link to="/register" className="btn-primary w-full" onClick={() => setMobileOpen(false)}>Get Started</Link>
-            </div>
-          </div>
-        )}
       </header>
 
-      {/* ─── Hero ─── */}
-      <section id="home" className="relative overflow-hidden pt-20 pb-28 px-4 sm:px-6 lg:px-8">
-        <div className="absolute inset-0 -z-10 overflow-hidden">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[600px] bg-gradient-to-b from-indigo-200/30 dark:from-indigo-500/10 to-transparent rounded-full blur-3xl" />
-        </div>
+      <section id="home" className="relative overflow-hidden">
+        <div
+          className="absolute inset-0 opacity-25"
+          style={{
+            backgroundImage:
+              'linear-gradient(rgba(0,0,0,.72), rgba(0,0,0,.72)), url(https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=2000&q=80)',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
+          aria-hidden="true"
+        />
 
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-indigo-50 dark:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-800 rounded-full text-xs font-semibold text-indigo-700 dark:text-indigo-300 mb-7">
-            <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse" />
-            Trusted by 150+ law enforcement agencies worldwide
-          </div>
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-24 grid lg:grid-cols-[1.1fr_.9fr] gap-10 items-center">
+          <div>
+            <p className="inline-flex items-center rounded-full px-3 py-1 bg-amber-500/15 border border-amber-400/30 text-amber-200 text-xs font-semibold mb-4">Real-time Civic Protection Platform</p>
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-tight max-w-2xl">
+              Report Incidents,
+              <br />
+              Protect Communities,
+              <br />
+              <span className="bg-gradient-to-r from-amber-300 via-orange-300 to-rose-300 bg-clip-text text-transparent">Get Fast Response.</span>
+            </h1>
+            <p className="text-slate-300 text-base sm:text-lg mt-6 max-w-xl leading-relaxed">
+              A secure platform where citizens, responders, and agencies work together with verified evidence,
+              rapid escalation, and structured incident workflows.
+            </p>
 
-          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight mb-6 leading-[1.05]">
-            Report Crimes{' '}
-            <span className="bg-gradient-to-r from-indigo-600 via-violet-500 to-purple-600 bg-clip-text text-transparent">
-              Securely.
-            </span>
-            <br />
-            Stay Anonymous.
-          </h1>
-
-          <p className="text-xl text-slate-600 dark:text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-            A modern, encrypted platform that empowers citizens to report crimes safely
-            while giving law enforcement the evidence they need.
-          </p>
-
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/register" className="btn-primary text-base px-8 py-3.5 rounded-2xl shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:shadow-indigo-500/30">
-              Submit a Report <ChevronRight className="w-4 h-4" />
-            </Link>
-            <Link to="/admin" className="btn-secondary text-base px-8 py-3.5 rounded-2xl">
-              Admin Dashboard
-            </Link>
-          </div>
-
-          <div className="mt-10 flex flex-wrap justify-center gap-x-8 gap-y-2.5">
-            {TRUST.map((item) => (
-              <div key={item} className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-                <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
-                {item}
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl mx-auto">
-            <div className="bg-white/80 dark:bg-slate-900/70 border border-slate-200/70 dark:border-slate-700/70 backdrop-blur rounded-2xl p-4 text-left">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-300 mb-2">
-                <CalendarDays className="w-4 h-4" /> Date & Time
-              </div>
-              <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{now.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
-              <p className="text-xl font-extrabold text-slate-900 dark:text-white mt-1 flex items-center gap-2">
-                <Clock3 className="w-4 h-4 text-indigo-500" />
-                {now.toLocaleTimeString()}
-              </p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link to="/register" className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-amber-500 text-black font-bold hover:bg-amber-400">
+                Submit Report <ChevronRight className="w-4 h-4" />
+              </Link>
+              <Link to="/live" className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-amber-700/50 text-amber-100 hover:bg-amber-900/20">
+                Start Live Stream
+              </Link>
             </div>
 
-            <div className="bg-white/80 dark:bg-slate-900/70 border border-slate-200/70 dark:border-slate-700/70 backdrop-blur rounded-2xl p-4 text-left">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-300 mb-2">
-                <CloudSun className="w-4 h-4" /> Weather Report
-              </div>
-              {weather.loading ? (
-                <p className="text-sm text-slate-500 dark:text-slate-400">Loading weather…</p>
-              ) : (
-                <>
-                  <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{weather.location}</p>
-                  <p className="text-xl font-extrabold text-slate-900 dark:text-white mt-1">{weather.temp ?? '--'}°C</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Wind: {weather.wind ?? '--'} km/h · Code: {weather.code ?? '--'}</p>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* ── Dashboard Preview Mockup ── */}
-        <div className="mt-20 max-w-5xl mx-auto">
-          <div className="relative rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-2xl shadow-slate-900/10 overflow-hidden">
-            {/* Browser bar */}
-            <div className="flex items-center gap-2 px-4 py-3 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-              <div className="flex gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-red-400" />
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-              </div>
-              <div className="flex-1 h-5 max-w-xs mx-auto bg-slate-200 dark:bg-slate-700 rounded-md" />
-            </div>
-
-            {/* Mock UI */}
-            <div className="bg-slate-50 dark:bg-slate-900 p-6">
-              <div className="grid grid-cols-4 gap-4 mb-5">
-                {[
-                  { label: 'Total Reports', value: '1,284', bar: 'bg-indigo-500' },
-                  { label: 'Pending', value: '48', bar: 'bg-amber-500' },
-                  { label: 'Resolved', value: '1,019', bar: 'bg-emerald-500' },
-                  { label: 'Rejected', value: '217', bar: 'bg-red-500' },
-                ].map((s) => (
-                  <div key={s.label} className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700 shadow-sm">
-                    <div className={`w-10 h-1.5 rounded-full ${s.bar} mb-3`} />
-                    <div className="text-xl font-bold text-slate-900 dark:text-white">{s.value}</div>
-                    <div className="text-xs text-slate-500 mt-0.5">{s.label}</div>
-                  </div>
-                ))}
-              </div>
-              <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
-                <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
-                  <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">Recent Reports</span>
-                  <div className="flex gap-1.5">
-                    {['All', 'Pending', 'Active'].map((f, i) => (
-                      <span key={f} className={`text-xs px-3 py-1 rounded-lg font-medium ${i === 0 ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'}`}>{f}</span>
-                    ))}
-                  </div>
+            <div className="mt-7 grid sm:grid-cols-2 gap-2.5 max-w-lg">
+              {['Anonymous reporting', 'Live evidence support', 'Encrypted media storage', 'Agency-ready output'].map((item) => (
+                <div key={item} className="flex items-center gap-2 text-sm text-slate-300">
+                  <Check className="w-4 h-4 text-amber-300" />
+                  {item}
                 </div>
-                {[
-                  { type: 'Armed Robbery', loc: 'Downtown', status: 'Pending', c: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
-                  { type: 'Vandalism', loc: 'West Side', status: 'Under Review', c: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
-                  { type: 'Assault', loc: 'North Park', status: 'Approved', c: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
-                ].map((row, i) => (
-                  <div key={i} className="flex items-center px-4 py-3.5 border-t border-slate-100 dark:border-slate-700/60 text-sm">
-                    <div className="flex-1 font-medium text-slate-800 dark:text-slate-100">{row.type}</div>
-                    <div className="w-28 text-slate-400 dark:text-slate-500 text-xs">{row.loc}</div>
-                    <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${row.c}`}>{row.status}</span>
-                  </div>
-                ))}
-              </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-gradient-to-br from-[#18140f] to-[#151c2b] border border-amber-800/30 p-6 shadow-xl shadow-black/40">
+            <p className="text-xs uppercase tracking-wide text-amber-300 mb-3">Command Snapshot</p>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              {[
+                { label: 'Open Alerts', value: '48' },
+                { label: 'Active Streams', value: '12' },
+                { label: 'Escalated Today', value: '31' },
+                { label: 'Avg Dispatch', value: '3.2m' },
+              ].map((item) => (
+                <div key={item.label} className="rounded-xl border border-amber-900/30 bg-black/25 backdrop-blur p-3">
+                  <p className="text-2xl font-black text-amber-200">{item.value}</p>
+                  <p className="text-xs text-slate-400 mt-1">{item.label}</p>
+                </div>
+              ))}
+            </div>
+            <div className="rounded-xl border border-sky-900/30 bg-black/25 p-3 space-y-2 text-sm">
+              <p className="flex items-center gap-2 text-slate-300"><MapPin className="w-4 h-4 text-amber-300" /> Geo-tracked evidence pipeline is active.</p>
+              <p className="flex items-center gap-2 text-slate-300"><Clock3 className="w-4 h-4 text-sky-300" /> Last sync: 20 seconds ago.</p>
+              <p className="flex items-center gap-2 text-slate-300"><Siren className="w-4 h-4 text-rose-300" /> Emergency escalation route verified.</p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ─── Testimonials ─── */}
-      <section id="testimonials" className="py-20 px-4 sm:px-6 lg:px-8 bg-white/75 dark:bg-slate-900/40 backdrop-blur">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white">Testimonials</h2>
-            <p className="text-slate-600 dark:text-slate-400 mt-3">What citizens and responders say about the platform.</p>
-          </div>
-          <div className="grid md:grid-cols-3 gap-5">
-            {[
-              { name: 'Amina K.', quote: 'Reporting felt safe and easy. I got updates almost immediately.' },
-              { name: 'Officer Danladi', quote: 'The evidence quality and timestamps help us respond faster.' },
-              { name: 'Efe O.', quote: 'Anonymous mode gave me confidence to report what I witnessed.' },
-            ].map((t) => (
-              <div key={t.name} className="card p-6">
-                <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">“{t.quote}”</p>
-                <p className="mt-4 text-sm font-semibold text-indigo-600 dark:text-indigo-300">— {t.name}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <NewsSection />
-
-      {/* ─── Stats ─── */}
-      <section id="stats" className="py-16 bg-gradient-to-r from-indigo-600 to-violet-600">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-2 lg:grid-cols-4 gap-10">
-          {STATS.map((s) => (
-            <div key={s.label} className="text-center">
-              <div className="text-4xl font-extrabold text-white mb-1.5 tracking-tight">{s.value}</div>
-              <div className="text-indigo-200 text-sm font-medium">{s.label}</div>
+      <section className="py-8 border-y border-amber-900/20 bg-[#15110c]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {KPI_STATS.map((item) => (
+            <div key={item.label} className={`rounded-xl border bg-gradient-to-br px-4 py-5 text-center ${item.tone}`}>
+              <p className={`text-3xl font-black ${item.valueColor}`}>{item.value}</p>
+              <p className="text-sm text-slate-400 mt-1">{item.label}</p>
             </div>
           ))}
         </div>
       </section>
 
-      {/* ─── Features ─── */}
-      <section id="features" className="py-24 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <div className="inline-block px-4 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full text-sm font-semibold mb-4 border border-indigo-100 dark:border-indigo-800">
-              Features
-            </div>
-            <h2 className="text-4xl font-bold text-slate-900 dark:text-white mb-4">Everything You Need to Report Safely</h2>
-            <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
-              Built with cutting-edge security and privacy technology to protect reporters while empowering law enforcement.
+      <section id="features" className="py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-[1fr_1.1fr] gap-10 items-center">
+          <div className="rounded-2xl border border-amber-800/30 bg-[#19140f] p-6 lg:p-8">
+            <p className="text-xs uppercase tracking-wide text-amber-300">Platform Confidence</p>
+            <h2 className="text-3xl sm:text-4xl font-black mt-3">Professionals work with reliable data.</h2>
+            <p className="mt-4 text-slate-300 leading-relaxed">
+              Our system is built for practical response teams: structured intake, clear evidence trails,
+              and secure communication channels from citizen to command center.
             </p>
-          </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {FEATURES.map((f) => (
-              <div key={f.title} className="card p-6 hover:shadow-lg hover:shadow-slate-900/5 transition-all duration-200 group">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 transition-transform group-hover:scale-110 duration-200 ${f.color}`}>
-                  <f.icon className="w-5.5 h-5.5" />
+            <div className="mt-6 grid sm:grid-cols-2 gap-3 text-sm">
+              {[
+                'Verified response workflows',
+                'Geo-intelligent triage',
+                'Role-based admin controls',
+                'Cross-agency visibility',
+                'Audit-friendly timelines',
+                'Professional support operations',
+              ].map((point) => (
+                <div key={point} className="flex items-center gap-2 text-slate-300">
+                  <Check className="w-4 h-4 text-amber-300" />
+                  {point}
                 </div>
-                <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-2">{f.title}</h3>
-                <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{f.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ─── How It Works ─── */}
-      <section id="how-it-works" className="py-24 bg-slate-50 dark:bg-slate-800/30 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-16">
-            <div className="inline-block px-4 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full text-sm font-semibold mb-4 border border-indigo-100 dark:border-indigo-800">
-              How It Works
-            </div>
-            <h2 className="text-4xl font-bold text-slate-900 dark:text-white">Three Steps to Safer Communities</h2>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            {STEPS.map((s, i) => (
-              <div key={s.step} className="relative text-center">
-                {i < STEPS.length - 1 && (
-                  <div className="hidden md:block absolute top-10 left-[60%] w-[80%] h-px border-t-2 border-dashed border-slate-300 dark:border-slate-600" />
-                )}
-                <div className="w-20 h-20 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-md border border-slate-200 dark:border-slate-700">
-                  <span className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400">{s.step}</span>
-                </div>
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">{s.title}</h3>
-                <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{s.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ─── CTA ─── */}
-      <section className="py-24 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-3xl mx-auto">
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-700 p-12 text-center shadow-2xl shadow-indigo-500/20">
-            <div className="absolute top-0 right-0 w-72 h-72 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
-            <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
-            <div className="relative z-10">
-              <h2 className="text-4xl font-extrabold text-white mb-4">Ready to Make Your Community Safer?</h2>
-              <p className="text-indigo-200 text-lg mb-8">
-                Join thousands of citizens helping build safer neighborhoods — anonymously and securely.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link to="/register" className="px-8 py-3.5 bg-white text-indigo-700 font-bold rounded-2xl hover:bg-indigo-50 transition-colors shadow-lg">
-                  Get Started Free
-                </Link>
-                <Link to="/login" className="px-8 py-3.5 border-2 border-indigo-400/60 text-white font-bold rounded-2xl hover:bg-white/10 transition-colors">
-                  Sign In
-                </Link>
-              </div>
+              ))}
             </div>
           </div>
+
+          <div className="grid sm:grid-cols-2 gap-4">
+            {CORE_FEATURES.map((feature) => (
+              <article key={feature.title} className={`rounded-2xl border border-amber-900/25 bg-[#15110c] p-5 transition-colors ${feature.borderTone}`}>
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 ${feature.iconTone}`}>
+                  <feature.icon className="w-5 h-5" />
+                </div>
+                <h3 className="font-bold text-lg text-amber-100">{feature.title}</h3>
+                <p className="text-sm text-slate-400 mt-2 leading-relaxed">{feature.description}</p>
+              </article>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* ─── Footer ─── */}
-      <footer id="contact" className="border-t border-slate-200 dark:border-slate-800 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-2">
-            <img src="/logo.webp" alt="True Hero Crime Report Logo" className="h-8 w-auto object-contain" />
-            <span className="text-sm font-bold text-slate-900 dark:text-white">
-              TRUE <span className="text-indigo-600">HERO</span> CRIME REPORT
-            </span>
-          </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400">© 2026 TRUE HERO CRIME REPORT. All rights reserved.</p>
-          <div className="flex gap-6 text-sm text-slate-500 dark:text-slate-400">
-            {['Privacy Policy', 'Terms of Service', 'Contact'].map((l) => (
-              <a key={l} href="#" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">{l}</a>
+      <section id="operations" className="py-20 bg-[#15110c] border-y border-amber-900/20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <p className="text-sm text-amber-300 font-semibold">Operational Areas</p>
+          <h2 className="text-3xl sm:text-4xl font-black mt-2 mb-10">Built for mission-critical civic response.</h2>
+
+          <div className="grid lg:grid-cols-2 gap-5">
+            {OPERATIONS.map((area) => (
+              <article key={area.title} className={`rounded-2xl border bg-gradient-to-br ${area.tone} p-6`}>
+                <h3 className="text-xl font-bold text-amber-100">{area.title}</h3>
+                <p className="text-sm text-slate-400 mt-2 mb-4">{area.subtitle}</p>
+                <ul className="space-y-2 text-sm text-slate-300">
+                  {area.points.map((point) => (
+                    <li key={point} className="flex items-center gap-2">
+                      <Check className="w-4 h-4 text-amber-300" />
+                      {point}
+                    </li>
+                  ))}
+                </ul>
+              </article>
             ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="process" className="py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-2 gap-8">
+          <div>
+            <p className="text-sm text-amber-300 font-semibold">How It Works</p>
+            <h2 className="text-3xl sm:text-4xl font-black mt-2 mb-6">Simple workflow. Serious outcomes.</h2>
+            <div className="space-y-3">
+              {PROCESS.map((step) => (
+                <div key={step.step} className="rounded-xl border border-amber-900/25 bg-[#17120d] p-4 flex gap-4">
+                  <div className={`w-11 h-11 rounded-lg font-black grid place-items-center ${step.tone}`}>{step.step}</div>
+                  <div>
+                    <h3 className="font-bold text-amber-100">{step.title}</h3>
+                    <p className="text-sm text-slate-400 mt-1">{step.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-amber-900/30 bg-[#18140f] p-6 lg:p-8">
+            <p className="text-sm text-amber-300 font-semibold">About the Platform</p>
+            <h3 className="text-2xl font-black mt-2">Our Mission</h3>
+            <p className="mt-3 text-sm text-slate-300 leading-relaxed">{ABOUT_MISSION}</p>
+
+            <h4 className="text-base font-bold mt-6 text-amber-100">Our Journey</h4>
+            <div className="mt-6 space-y-4">
+              {TIMELINE.map((item) => (
+                <div key={item.year} className="flex gap-3">
+                  <div className="w-16 shrink-0 text-sm font-bold text-amber-200">{item.year}</div>
+                  <div className="text-sm text-slate-300 leading-relaxed border-l border-amber-900/40 pl-3">{item.text}</div>
+                </div>
+              ))}
+            </div>
+
+            <h4 className="text-base font-bold mt-6 text-amber-100">How We Help</h4>
+            <ul className="mt-3 space-y-2 text-sm text-slate-300">
+              {ABOUT_HELP_POINTS.map((point) => (
+                <li key={point} className="flex items-start gap-2">
+                  <Check className="w-4 h-4 mt-0.5 text-amber-300" />
+                  <span>{point}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section className="py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="rounded-2xl bg-gradient-to-r from-amber-300 via-orange-300 to-rose-300 text-black px-6 py-6 sm:px-8 sm:py-7 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between shadow-xl shadow-orange-900/30">
+            <div>
+              <h3 className="text-xl sm:text-2xl font-black">Request emergency support and coordination.</h3>
+              <p className="text-sm sm:text-base text-black/80 mt-1">Immediate support for active incidents and high-risk reports.</p>
+            </div>
+            <Link to="/register" className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-black text-amber-300 font-bold hover:bg-slate-900">
+              Create Account <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <section id="testimonials" className="py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <p className="text-sm text-amber-300 font-semibold">Community Feedback</p>
+          <h2 className="text-3xl sm:text-4xl font-black mt-2 mb-8">What teams say about True Crime Hood.</h2>
+          <div className="grid md:grid-cols-3 gap-5">
+            {TESTIMONIALS.map((t) => (
+              <article key={t.author} className="rounded-2xl border border-amber-900/25 bg-gradient-to-br from-[#17120d] to-[#182131] p-6">
+                <p className="text-sm text-slate-300 leading-relaxed">“{t.quote}”</p>
+                <div className="mt-5 pt-4 border-t border-amber-900/30">
+                  <p className="font-bold text-amber-100">{t.author}</p>
+                  <p className="text-xs text-slate-400">{t.role}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="news">
+        <NewsSection />
+      </section>
+
+      <footer id="contact" className="pt-14 pb-8 border-t border-amber-900/20 bg-[#0f0c08]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-4 gap-8">
+          <div>
+            <h4 className="font-black text-amber-100 mb-3">TRUE CRIME HOOD</h4>
+            <p className="text-sm text-slate-400 leading-relaxed">
+              Strengthening public safety with secure reporting, professional workflows, and trusted collaboration.
+            </p>
+            <div className="mt-4 space-y-1 text-sm text-slate-300">
+              <p className="flex items-center gap-2"><Building2 className="w-4 h-4 text-amber-300" /> Civic Response Command</p>
+              <p>Call us: +2347036939125</p>
+              <p>Email: okntaysm@gmail.com</p>
+            </div>
+          </div>
+
+          {Object.entries(FOOTER_LINKS).map(([title, links]) => (
+            <div key={title}>
+              <h5 className="font-bold text-amber-100 mb-3">{title}</h5>
+              <ul className="space-y-2 text-sm">
+                {links.map((item) => (
+                  <li key={item.label}>
+                    <a href={item.to} className="text-slate-400 hover:text-amber-300 inline-flex items-center gap-2">
+                      <ChevronRight className="w-3.5 h-3.5" />
+                      {item.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-10 pt-4 border-t border-amber-900/20 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between text-xs text-slate-500">
+          <p>© 2026 TRUE CRIME HOOD. All rights reserved.</p>
+          <div className="flex items-center gap-4">
+            <a href="#" className="hover:text-amber-300">Privacy Policy</a>
+            <a href="#" className="hover:text-amber-300">Terms</a>
+            <a href="#" className="hover:text-amber-300">Contact</a>
           </div>
         </div>
       </footer>

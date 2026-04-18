@@ -115,21 +115,21 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-900 font-sans">
+    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-indigo-50/50 to-violet-50/50 dark:from-slate-900 dark:via-indigo-950/20 dark:to-violet-950/20 font-sans">
       <AdminSidebar />
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6">
+        <header className="h-16 bg-gradient-to-r from-white to-indigo-50/70 dark:from-slate-900 dark:to-indigo-950/20 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6">
           <div>
-            <h1 className="text-base font-extrabold">Admin Overview</h1>
-            <p className="text-xs text-slate-500">Central moderation dashboard</p>
+            <h1 className="text-base font-extrabold bg-gradient-to-r from-indigo-700 to-violet-700 dark:from-indigo-300 dark:to-violet-300 bg-clip-text text-transparent">Admin Overview</h1>
+            <p className="text-xs text-slate-600 dark:text-slate-400">Central moderation dashboard</p>
           </div>
           <ThemeToggle />
         </header>
 
         <main className="flex-1 overflow-y-auto p-6 space-y-5">
           {configHealth && (
-            <section className="card p-4 space-y-2">
+            <section className="card p-4 space-y-2 border border-indigo-400/25 bg-gradient-to-r from-indigo-500/10 via-transparent to-violet-500/10">
               <p className="text-xs uppercase tracking-wide text-slate-500">System Setup Health</p>
               <div className="flex flex-wrap gap-2">
                 {healthChecks.map((item) => (
@@ -167,15 +167,15 @@ export default function AdminDashboard() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-4">
-            <div className="card p-4">
+            <div className="card p-4 bg-gradient-to-br from-red-500/10 to-transparent border border-red-500/25">
               <p className="text-sm text-slate-500">High-risk incidents</p>
               <p className="text-2xl font-bold text-red-600">{stats?.highRiskReports ?? 0}</p>
             </div>
-            <div className="card p-4">
+            <div className="card p-4 bg-gradient-to-br from-amber-500/10 to-transparent border border-amber-500/25">
               <p className="text-sm text-slate-500">Escalated incidents</p>
               <p className="text-2xl font-bold text-amber-600">{stats?.escalatedReports ?? 0}</p>
             </div>
-            <div className="card p-4">
+            <div className="card p-4 bg-gradient-to-br from-indigo-500/10 to-transparent border border-indigo-500/25">
               <p className="text-sm text-slate-500">Active live streams</p>
               <p className="text-2xl font-bold text-indigo-600">{stats?.activeStreams ?? 0}</p>
             </div>

@@ -37,9 +37,9 @@ export default function StatsCard({ icon: Icon, label, value, trend, trendLabel,
     trend > 0 ? 'text-emerald-600 dark:text-emerald-400' : trend < 0 ? 'text-red-500 dark:text-red-400' : 'text-slate-400'
 
   return (
-    <div className="card p-5 flex flex-col gap-4 hover:shadow-md transition-all duration-200">
+    <div className="card p-5 flex flex-col gap-4 hover:shadow-lg hover:shadow-indigo-900/15 transition-all duration-300 group border border-slate-200 dark:border-slate-700/80 hover:-translate-y-0.5">
       <div className="flex items-start justify-between">
-        <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${c.iconBg}`}>
+        <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${c.iconBg} ring-1 ring-black/5 dark:ring-white/10 transition-transform duration-300 group-hover:scale-105`}>
           {Icon && <Icon className={`w-5 h-5 ${c.iconColor}`} />}
         </div>
         {trend !== undefined && (
@@ -55,7 +55,10 @@ export default function StatsCard({ icon: Icon, label, value, trend, trendLabel,
         {trendLabel && <div className="text-xs text-slate-400 dark:text-slate-500 mt-1">{trendLabel}</div>}
       </div>
       <div className="h-1 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${c.bar}`} style={{ width: `${Math.min(100, Math.abs(trend ?? 60))}%` }} />
+        <div
+          className={`h-full rounded-full ${c.bar} transition-all duration-700 ease-out`}
+          style={{ width: `${Math.min(100, Math.abs(trend ?? 60))}%` }}
+        />
       </div>
     </div>
   )

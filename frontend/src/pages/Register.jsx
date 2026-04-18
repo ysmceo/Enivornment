@@ -85,10 +85,16 @@ export default function Register() {
   }
 
   return (
-    <main className="min-h-screen grid place-items-center p-4">
-      <section className="card p-6 w-full max-w-lg">
-        <h1 className="text-2xl font-bold">Create account</h1>
-        <p className="text-sm text-slate-500 mt-1">Register across all 36 states + FCT for secure civic reporting.</p>
+    <main className="min-h-screen grid place-items-center p-4 relative overflow-hidden bg-slate-950">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -top-24 -right-10 w-80 h-80 bg-emerald-500/20 blur-3xl rounded-full" />
+        <div className="absolute bottom-0 left-0 w-80 h-80 bg-indigo-500/20 blur-3xl rounded-full" />
+        <div className="absolute top-1/3 left-1/3 w-72 h-72 bg-amber-500/10 blur-3xl rounded-full" />
+      </div>
+
+      <section className="card p-6 w-full max-w-lg relative border border-emerald-500/30 bg-gradient-to-br from-slate-900/95 to-slate-800/90 shadow-2xl shadow-emerald-900/25">
+        <h1 className="text-2xl font-bold text-white">Create account</h1>
+        <p className="text-sm text-slate-300 mt-1">Register across all 36 states + FCT for secure civic reporting.</p>
 
         <form onSubmit={onSubmit} className="space-y-4 mt-5">
           <div>
@@ -134,7 +140,7 @@ export default function Register() {
                 </option>
               ))}
             </select>
-            <p className="text-xs text-slate-500 mt-1">Choose one: NIN, BVN, Passport, or Government Issued Valid ID Card.</p>
+            <p className="text-xs text-slate-400 mt-1">Choose one: NIN, BVN, Passport, or Government Issued Valid ID Card.</p>
           </div>
 
           <div>
@@ -151,7 +157,7 @@ export default function Register() {
           <div>
             <label className="label">Government ID Upload (required)</label>
             <input className="input" type="file" accept="image/*,.pdf" onChange={(e) => setIdFile(e.target.files?.[0] || null)} />
-            <p className="text-xs text-slate-500 mt-1">Allowed formats: JPG, PNG, WEBP, PDF. Max size: 5MB.</p>
+            <p className="text-xs text-slate-400 mt-1">Allowed formats: JPG, PNG, WEBP, PDF. Max size: 5MB.</p>
           </div>
 
           <button className="btn-primary w-full" disabled={loading} type="submit">
@@ -159,8 +165,8 @@ export default function Register() {
           </button>
         </form>
 
-        <p className="text-sm text-slate-500 mt-4">
-          Already registered? <Link to="/login" className="text-indigo-600">Sign in</Link>
+        <p className="text-sm text-slate-300 mt-4">
+          Already registered? <Link to="/login" className="text-emerald-300 hover:text-emerald-200">Sign in</Link>
         </p>
       </section>
     </main>

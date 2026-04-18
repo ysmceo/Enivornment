@@ -353,7 +353,7 @@ export default function CitizenDashboard() {
       const networkIssue = !navigator.onLine || !err.response
       if (networkIssue) {
         if (files.length > 0) {
-          toast.error('Offline queue currently supports text/location data only. Please resubmit media when online.')
+          toast.error(t('offlineMediaResubmit', 'Offline queue currently supports text/location data only. Please resubmit media when online.'))
         }
 
         const queueSize = enqueueOfflineReport({

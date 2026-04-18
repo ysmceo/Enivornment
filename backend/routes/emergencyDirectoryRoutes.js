@@ -4,6 +4,8 @@ const {
   getEmergencyDirectory,
   getNearbyAuthorities,
   adminListEmergencyContacts,
+  adminExportEmergencyContactsCsv,
+  adminImportEmergencyContactsCsv,
   adminCreateEmergencyContact,
   adminUpdateEmergencyContact,
   adminDeleteEmergencyContact,
@@ -22,6 +24,8 @@ router.get('/state/:state', (req, _res, next) => {
 }, getEmergencyDirectory);
 
 router.get('/admin/all', protect, requireAdmin, adminListEmergencyContacts);
+router.get('/admin/export-csv', protect, requireAdmin, adminExportEmergencyContactsCsv);
+router.post('/admin/import-csv', protect, requireAdmin, adminImportEmergencyContactsCsv);
 
 const contactValidation = [
   body('name').trim().notEmpty().isLength({ max: 150 }),

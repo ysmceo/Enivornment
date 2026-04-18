@@ -27,13 +27,13 @@ export default function AdminSidebar() {
 
   return (
     <aside
-      className={`flex flex-col h-screen bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-all duration-300 shrink-0 ${
+      className={`flex flex-col h-screen bg-gradient-to-b from-white to-indigo-50/50 dark:from-slate-900 dark:to-indigo-950/20 border-r border-slate-200 dark:border-slate-800 transition-all duration-300 shrink-0 ${
         collapsed ? 'w-16' : 'w-60'
       }`}
     >
       {/* Logo */}
       <div className={`flex items-center h-16 px-4 border-b border-slate-200 dark:border-slate-800 ${collapsed ? 'justify-center' : 'gap-2.5'}`}>
-        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shrink-0">
+        <div className="w-8 h-8 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-lg flex items-center justify-center shrink-0 shadow-md shadow-indigo-500/30">
           <Shield className="w-4.5 h-4.5 text-white" />
         </div>
         {!collapsed && (
@@ -52,7 +52,7 @@ export default function AdminSidebar() {
               key={to}
               to={to}
               title={collapsed ? label : undefined}
-              className={`sidebar-link ${active ? 'sidebar-link-active' : ''} ${collapsed ? 'justify-center px-2' : ''}`}
+              className={`sidebar-link ${active ? 'sidebar-link-active ring-1 ring-indigo-300/50 dark:ring-indigo-700/50' : ''} ${collapsed ? 'justify-center px-2' : ''}`}
             >
               <Icon className="w-4.5 h-4.5 shrink-0" />
               {!collapsed && <span>{label}</span>}
