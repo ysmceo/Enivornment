@@ -3,6 +3,50 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { authService } from '../services/authService'
 
+const getPasswordStrength = (password) => {
+  const value = String(password || '')
+  let score = 0
+
+  if (value.length >= 8) score += 1
+  if (/[a-z]/.test(value) && /[A-Z]/.test(value)) score += 1
+  if (/\d/.test(value)) score += 1
+  if (/[^A-Za-z0-9]/.test(value)) score += 1
+
+  if (score <= 1) {
+    return {
+      label: 'Weak',
+      barClass: 'bg-rose-500',
+      textClass: 'text-rose-300',
+      width: '25%',
+    }
+  }
+
+  if (score === 2) {
+    return {
+      label: 'Fair',
+      barClass: 'bg-amber-500',
+      textClass: 'text-amber-300',
+      width: '50%',
+    }
+  }
+
+  if (score === 3) {
+    return {
+      label: 'Good',
+      barClass: 'bg-sky-500',
+      textClass: 'text-sky-300',
+      width: '75%',
+    }
+  }
+
+  return {
+    label: 'Strong',
+    barClass: 'bg-emerald-500',
+    textClass: 'text-emerald-300',
+    width: '100%',
+  }
+}
+
 export default function ResetPassword() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -11,6 +55,7 @@ export default function ResetPassword() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const passwordStrength = useMemo(() => getPasswordStrength(newPassword), [newPassword])
 
   const onSubmit = async (e) => {
     e.preventDefault()
@@ -60,6 +105,20 @@ export default function ResetPassword() {
               onChange={(e) => setNewPassword(e.target.value)}
               required
             />
+            <div className="mt-2 space-y-2">
+              <div className="h-2 w-full rounded-full bg-slate-700 overflow-hidden">
+                <div className={`h-full transition-all duration-300 ${passwordStrength.barClass}`} style={{ width: passwordStrength.width }} />
+              </div>
+              <p className={`text-xs font-medium ${passwordStrength.textClass}`}>
+                Password strength: {passwordStrength.label}
+              </p>
+              <ul className="text-[11px] text-slate-400 space-y-0.5 list-disc pl-4">
+                <li>At least 8 characters</li>
+                <li>Uppercase and lowercase letters</li>
+                <li>At least one number</li>
+                <li>At least one special character</li>
+              </ul>
+            </div>
           </div>
 
           <div>
