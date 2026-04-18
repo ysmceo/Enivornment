@@ -10,7 +10,7 @@ const SIGNALING_URL =
   import.meta.env.VITE_SOCKET_URL ||
   `${window.location.protocol}//${window.location.hostname}:${import.meta.env.VITE_API_PORT || '5001'}`
 
-export default function LiveStreamRoom({ role = 'viewer', initialRoomId = '' }) {
+export default function LiveStreamRoom({ role = 'viewer', initialRoomId = '', autoStart = false }) {
   const { token } = useAuth()
   const [roomId, setRoomId] = useState(initialRoomId)
   const [inSession, setInSession] = useState(false)
@@ -24,6 +24,7 @@ export default function LiveStreamRoom({ role = 'viewer', initialRoomId = '' }) 
   const peersRef = useRef(new Map())
   const localVideoRef = useRef(null)
   const remoteVideoRef = useRef(null)
+  const autoStartTriggeredRef = useRef(false)
 
   useEffect(() => {
     if (!inSession && initialRoomId) {
@@ -240,6 +241,17 @@ export default function LiveStreamRoom({ role = 'viewer', initialRoomId = '' }) 
       setError(`Unable to start session: ${err.message}`)
     }
   }, [connectSocket, ensureLocalMedia, role, roomId, sendOffer])
+
+  useEffect(() => {
+    if (!autoStart || inSession || autoStartTriggeredRef.current) return
+    if (!roomId?.trim()) return
+
+    autoStartTriggeredRef.current = true
+    startSession().catch(() => {
+      // allow manual retry from the button
+      autoStartTriggeredRef.current = false
+    })
+  }, [autoStart, inSession, roomId, startSession])
 
   useEffect(() => {
     return () => cleanupSession()

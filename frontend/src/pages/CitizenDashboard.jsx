@@ -197,6 +197,15 @@ export default function CitizenDashboard() {
     return map
   }, [reports])
 
+  const canStartLiveStream = user?.role === 'user' && user?.idVerificationStatus === 'verified'
+  const liveStreamRestriction = useMemo(() => {
+    if (canStartLiveStream) return ''
+    if (user?.role !== 'user') {
+      return 'Live streaming can only be started from a verified citizen user account.'
+    }
+    return 'Complete ID verification to start live streaming.'
+  }, [canStartLiveStream, user?.idVerificationStatus, user?.role])
+
   const setField = (k, v) => setForm((p) => ({ ...p, [k]: v }))
 
   const resolveAddressFromCoordinates = async (lat, lng) => {
@@ -548,8 +557,26 @@ export default function CitizenDashboard() {
                 <h2 className="text-lg font-semibold">Nigeria Incident Map</h2>
                 <p className="text-sm text-slate-500">Geolocated reports across all states + FCT</p>
               </div>
-              <Link to="/live/start" className="btn-secondary">Start Live Incident Stream</Link>
+              <div className="flex flex-wrap items-center gap-2">
+                <Link to="/live" className="btn-secondary">View Live Streams</Link>
+                {canStartLiveStream ? (
+                  <Link to="/live/start" className="btn-secondary">Start Live Incident Stream</Link>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-secondary opacity-60 cursor-not-allowed"
+                    disabled
+                    title={liveStreamRestriction}
+                  >
+                    Start Live Incident Stream
+                  </button>
+                )}
+              </div>
             </div>
+
+            {!canStartLiveStream && (
+              <p className="text-xs text-amber-700 dark:text-amber-300">{liveStreamRestriction}</p>
+            )}
 
             <div className="grid sm:grid-cols-3 gap-3 text-sm">
               <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">

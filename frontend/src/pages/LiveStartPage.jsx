@@ -60,5 +60,5 @@ export default function LiveStartPage() {
     )
   }
 
-  return <LiveStreamRoom role="streamer" initialRoomId={roomId} />
+  return <LiveStreamRoom role="streamer" initialRoomId={roomId} autoStart />
 }
