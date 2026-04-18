@@ -992,9 +992,14 @@ export default function CitizenDashboard() {
                       Incident: {report.incidentDate ? new Date(report.incidentDate).toLocaleString() : 'N/A'}
                     </p>
                     {report.status === 'pending' && (
-                      <p className="text-xs text-indigo-700 dark:text-indigo-300 mt-1 font-medium">
-                        Report submitted — awaiting admin approval.
-                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center rounded-full border border-amber-300 dark:border-amber-700 bg-amber-100 dark:bg-amber-900/30 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800 dark:text-amber-300">
+                          Pending Admin Approval
+                        </span>
+                        <p className="text-xs text-indigo-700 dark:text-indigo-300 font-medium">
+                          Report submitted — awaiting admin approval.
+                        </p>
+                      </div>
                     )}
                     {report.moderation?.flagged && (
                       <p className="text-xs text-amber-600 mt-1">Moderation review in progress</p>
