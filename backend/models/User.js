@@ -38,6 +38,18 @@ const userSchema = new mongoose.Schema(
       default: 'user',
     },
 
+    preferredPlan: {
+      type: String,
+      enum: ['free', 'premium'],
+      default: 'free',
+    },
+
+    currentPlan: {
+      type: String,
+      enum: ['free', 'premium'],
+      default: 'free',
+    },
+
     // Required platform contract fields
     isVerified: {
       type: Boolean,
@@ -268,6 +280,7 @@ userSchema.index({ idVerificationStatus: 1 });
 userSchema.index({ role: 1 });
 userSchema.index({ isVerified: 1 });
 userSchema.index({ premiumPlanStatus: 1, premiumPlanActive: 1 });
+userSchema.index({ currentPlan: 1, preferredPlan: 1 });
 
 // ─── Hooks ─────────────────────────────────────────────────────────────────
 

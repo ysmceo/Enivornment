@@ -29,6 +29,7 @@ const CaseTrackingPage = lazyWithReload(() => import('./pages/CaseTrackingPage')
 const AdminDashboard = lazyWithReload(() => import('./pages/AdminDashboard'))
 const AdminReports = lazyWithReload(() => import('./pages/AdminReports'))
 const AdminUsers = lazyWithReload(() => import('./pages/AdminUsers'))
+const AdminPremiumRequests = lazyWithReload(() => import('./pages/AdminPremiumRequests.jsx'))
 const AdminVerification = lazyWithReload(() => import('./pages/AdminVerification'))
 const AdminEmergencyContacts = lazyWithReload(() => import('./pages/AdminEmergencyContacts.jsx'))
 const EmergencyDirectoryPage = lazyWithReload(() => import('./pages/EmergencyDirectoryPageV2'))
@@ -117,6 +118,14 @@ export default function App() {
               element={
                 <ProtectedRoute role="admin">
                   <AdminUsers />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/premium-requests"
+              element={
+                <ProtectedRoute role="admin">
+                  <AdminPremiumRequests />
                 </ProtectedRoute>
               }
             />

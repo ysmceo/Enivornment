@@ -91,10 +91,24 @@ export default function AdminUsersScreen() {
       {loading ? <ActivityIndicator color="#22d3ee" /> : null}
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-      <View style={styles.summaryCard}>
-        <Text style={styles.summaryText}>Active: {summary.active}</Text>
-        <Text style={styles.summaryText}>Disabled: {summary.disabled}</Text>
-        <Text style={styles.summaryText}>Pending verification: {summary.pendingVerification}</Text>
+      <View style={styles.summaryHero}>
+        <Text style={styles.summaryHeroTitle}>User Operations Snapshot</Text>
+        <Text style={styles.summaryHeroSubtitle}>Monitor account state and ID verification readiness.</Text>
+      </View>
+
+      <View style={styles.summaryGrid}>
+        <View style={[styles.summaryCard, styles.summaryCardSuccess]}>
+          <Text style={styles.summaryLabel}>Active</Text>
+          <Text style={styles.summaryValue}>{summary.active}</Text>
+        </View>
+        <View style={[styles.summaryCard, styles.summaryCardNeutral]}>
+          <Text style={styles.summaryLabel}>Disabled</Text>
+          <Text style={styles.summaryValue}>{summary.disabled}</Text>
+        </View>
+        <View style={[styles.summaryCard, styles.summaryCardWarning]}>
+          <Text style={styles.summaryLabel}>Pending verification</Text>
+          <Text style={styles.summaryValue}>{summary.pendingVerification}</Text>
+        </View>
       </View>
 
       {users.slice(0, 25).map((user, idx) => {
@@ -146,17 +160,57 @@ const styles = StyleSheet.create({
   errorText: {
     color: '#f87171',
   },
-  summaryCard: {
-    backgroundColor: colors.surface,
+  summaryHero: {
+    backgroundColor: '#1b1530',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#4338ca',
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: 4,
+  },
+  summaryHeroTitle: {
+    color: '#c4b5fd',
+    fontWeight: '900',
+    fontSize: 17,
+  },
+  summaryHeroSubtitle: {
+    color: colors.textSecondary,
+    fontSize: 12,
+  },
+  summaryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  summaryCard: {
+    width: '48%',
+    borderWidth: 1,
     borderRadius: radius.md,
     padding: spacing.md,
-    gap: 6,
+    gap: 4,
   },
-  summaryText: {
-    color: colors.textSecondary,
+  summaryCardSuccess: {
+    borderColor: '#10b981',
+    backgroundColor: '#102c25',
+  },
+  summaryCardNeutral: {
+    borderColor: '#64748b',
+    backgroundColor: '#1f2937',
+  },
+  summaryCardWarning: {
+    borderColor: '#f59e0b',
+    backgroundColor: '#30230f',
+  },
+  summaryLabel: {
+    color: '#cbd5e1',
+    fontSize: 11,
     fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  summaryValue: {
+    color: '#f8fafc',
+    fontSize: 22,
+    fontWeight: '900',
   },
   userCard: {
     backgroundColor: colors.surface,

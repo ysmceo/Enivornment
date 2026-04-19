@@ -8,6 +8,12 @@ const {
 
 const emergencyContactSchema = new mongoose.Schema(
   {
+    scope: {
+      type: String,
+      enum: ['state', 'national'],
+      default: 'state',
+      index: true,
+    },
     name: {
       type: String,
       required: true,
@@ -22,8 +28,11 @@ const emergencyContactSchema = new mongoose.Schema(
     },
     state: {
       type: String,
-      required: true,
+      required() {
+        return this.scope !== 'national';
+      },
       enum: NIGERIA_STATES,
+      default: null,
       index: true,
     },
     region: {

@@ -22,4 +22,35 @@ export const adminService = {
       action,
       ...(action === 'reject' ? { rejectionReason: rejectionReason || 'Rejected via mobile admin app' } : {}),
     }),
+
+  getPremiumUpgradeRequests: (params = {}) => api.get('/admin/premium-requests', { params }),
+
+  approvePremiumUpgradeRequest: ({ requestId, adminNote = '' }) =>
+    api.patch(`/admin/premium-requests/${requestId}/approve`, {
+      ...(adminNote ? { adminNote } : {}),
+    }),
+
+  rejectPremiumUpgradeRequest: ({ requestId, reason = '' }) =>
+    api.patch(`/admin/premium-requests/${requestId}/reject`, {
+      ...(reason ? { reason } : {}),
+    }),
+
+  getMetadata: () => api.get('/meta/metadata'),
+
+  getEmergencyContacts: (params = {}) => api.get('/emergency-contacts/admin/all', { params }),
+
+  exportEmergencyContactsCsv: (params = {}) =>
+    api.get('/emergency-contacts/admin/export-csv', {
+      params,
+      responseType: 'text',
+      headers: { Accept: 'text/csv' },
+    }),
+
+  importEmergencyContactsCsv: (payload) => api.post('/emergency-contacts/admin/import-csv', payload),
+
+  createEmergencyContact: (payload) => api.post('/emergency-contacts', payload),
+
+  updateEmergencyContact: ({ contactId, payload }) => api.put(`/emergency-contacts/${contactId}`, payload),
+
+  deleteEmergencyContact: (contactId) => api.delete(`/emergency-contacts/${contactId}`),
 };

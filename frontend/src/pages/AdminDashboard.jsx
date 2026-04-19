@@ -438,6 +438,26 @@ export default function AdminDashboard() {
             Last refreshed: {lastRefreshedAt ? new Date(lastRefreshedAt).toLocaleTimeString() : 'Waiting for first sync...'}
           </section>
 
+          <section className="rounded-2xl border border-indigo-300/30 dark:border-indigo-700/40 bg-gradient-to-r from-indigo-600/15 via-violet-600/10 to-cyan-600/10 px-5 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">Executive Snapshot</h2>
+                <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">Moderation health, user trust, and risk posture in one glance.</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="rounded-full border border-indigo-300/60 dark:border-indigo-700/60 bg-white/70 dark:bg-slate-900/40 px-2.5 py-1 text-indigo-700 dark:text-indigo-300 font-semibold">
+                  Active streams: {stats?.activeStreams ?? 0}
+                </span>
+                <span className="rounded-full border border-emerald-300/60 dark:border-emerald-700/60 bg-white/70 dark:bg-slate-900/40 px-2.5 py-1 text-emerald-700 dark:text-emerald-300 font-semibold">
+                  Verified users: {stats?.verifiedUsers ?? 0}
+                </span>
+                <span className="rounded-full border border-rose-300/60 dark:border-rose-700/60 bg-white/70 dark:bg-slate-900/40 px-2.5 py-1 text-rose-700 dark:text-rose-300 font-semibold">
+                  High-risk: {stats?.highRiskReports ?? 0}
+                </span>
+              </div>
+            </div>
+          </section>
+
           <section className="card p-4 border border-indigo-300/30 bg-gradient-to-r from-indigo-500/10 via-transparent to-cyan-500/10">
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <div>
@@ -565,15 +585,15 @@ export default function AdminDashboard() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-4">
-            <div className="card p-4 bg-gradient-to-br from-red-500/10 to-transparent border border-red-500/25">
+            <div className="card p-4 bg-gradient-to-br from-red-500/10 to-transparent border border-red-500/25 shadow-sm hover:shadow-md transition-shadow">
               <p className="text-sm text-slate-500">High-risk incidents</p>
               <p className="text-2xl font-bold text-red-600">{stats?.highRiskReports ?? 0}</p>
             </div>
-            <div className="card p-4 bg-gradient-to-br from-amber-500/10 to-transparent border border-amber-500/25">
+            <div className="card p-4 bg-gradient-to-br from-amber-500/10 to-transparent border border-amber-500/25 shadow-sm hover:shadow-md transition-shadow">
               <p className="text-sm text-slate-500">Escalated incidents</p>
               <p className="text-2xl font-bold text-amber-600">{stats?.escalatedReports ?? 0}</p>
             </div>
-            <div className="card p-4 bg-gradient-to-br from-indigo-500/10 to-transparent border border-indigo-500/25">
+            <div className="card p-4 bg-gradient-to-br from-indigo-500/10 to-transparent border border-indigo-500/25 shadow-sm hover:shadow-md transition-shadow">
               <p className="text-sm text-slate-500">Active live streams</p>
               <p className="text-2xl font-bold text-indigo-600">{stats?.activeStreams ?? 0}</p>
             </div>

@@ -45,19 +45,33 @@ export function AuthProvider({ children }) {
     return latestUser;
   };
 
-  const login = async (email, password) => {
+  const persistSession = async (nextToken, nextUser) => {
+    await AsyncStorage.multiSet([
+      ['cr_token', nextToken],
+      ['cr_user', JSON.stringify(nextUser)],
+    ]);
+    setToken(nextToken);
+    setUser(nextUser);
+  };
+
+  const login = async (email, password, options = {}) => {
+    const { deferSession = false } = options;
     setLoading(true);
     try {
       const res = await api.post('/auth/login', { email, password });
       const nextToken = res.data.token;
       const nextUser = res.data.user;
-      await AsyncStorage.multiSet([
-        ['cr_token', nextToken],
-        ['cr_user', JSON.stringify(nextUser)],
-      ]);
-      setToken(nextToken);
-      setUser(nextUser);
-      return { success: true };
+      if (deferSession) {
+        return {
+          success: true,
+          user: nextUser,
+          completeLogin: async () => {
+            await persistSession(nextToken, nextUser);
+          },
+        };
+      }
+      await persistSession(nextToken, nextUser);
+      return { success: true, user: nextUser };
     } catch (err) {
       return { success: false, message: err?.response?.data?.message || 'Login failed' };
     } finally {

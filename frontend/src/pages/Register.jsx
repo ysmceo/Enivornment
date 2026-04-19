@@ -21,7 +21,9 @@ export default function Register() {
   const fallbackIdCardTypes = ['nin', 'bvn', 'passport', 'government_issued_valid_id_card']
   const [idFile, setIdFile] = useState(null)
   const [profilePhotoFile, setProfilePhotoFile] = useState(null)
+  const [premiumReceiptFile, setPremiumReceiptFile] = useState(null)
   const [cloudinaryConfigured, setCloudinaryConfigured] = useState(true)
+  const [premiumConfig, setPremiumConfig] = useState(null)
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -33,6 +35,12 @@ export default function Register() {
     state: 'FCT',
     idCardType: 'nin',
     idCardNumber: '',
+    selectedPlan: 'free',
+    premiumTransferReference: '',
+    premiumTransferAmount: '',
+    premiumTransferDate: '',
+    premiumTransferSenderName: '',
+    premiumTransferNote: '',
   })
 
   const age = useMemo(() => {
@@ -61,18 +69,21 @@ export default function Register() {
   useEffect(() => {
     const loadStates = async () => {
       try {
-        const [metaRes, healthRes] = await Promise.all([
+        const [metaRes, healthRes, premiumRes] = await Promise.all([
           platformService.getMetadata(),
           platformService.getConfigHealth(),
+          authService.getPremiumConfig(),
         ])
 
         setStates(metaRes.data.metadata?.states || fallbackStates)
         setIdCardTypes(metaRes.data.metadata?.idCardTypes || fallbackIdCardTypes)
         setCloudinaryConfigured(Boolean(healthRes.data?.configHealth?.cloudinary?.configured))
+        setPremiumConfig(premiumRes?.data?.config || null)
       } catch {
         setStates(fallbackStates)
         setIdCardTypes(fallbackIdCardTypes)
         setCloudinaryConfigured(false)
+        setPremiumConfig(null)
       }
     }
 
@@ -109,6 +120,16 @@ export default function Register() {
       }
     }
 
+    if (form.selectedPlan === 'premium' && !String(form.premiumTransferReference || '').trim()) {
+      toast.error('Premium registration requires a transfer reference after bank transfer')
+      return
+    }
+
+    if (form.selectedPlan === 'premium' && !premiumReceiptFile) {
+      toast.error('Please upload your premium payment receipt before registration')
+      return
+    }
+
     const registerPayload = {
       name: form.name,
       email: form.email,
@@ -119,6 +140,14 @@ export default function Register() {
       adultConsentAccepted: isAdult ? form.adultConsentAccepted : false,
       minorConsentAccepted: !isAdult ? form.minorConsentAccepted : false,
       idCardType: isAdult ? form.idCardType : undefined,
+      selectedPlan: form.selectedPlan,
+      premiumTransferReference: form.selectedPlan === 'premium' ? form.premiumTransferReference : undefined,
+      premiumTransferAmount: form.selectedPlan === 'premium' && form.premiumTransferAmount
+        ? Number(form.premiumTransferAmount)
+        : undefined,
+      premiumTransferDate: form.selectedPlan === 'premium' ? form.premiumTransferDate : undefined,
+      premiumTransferSenderName: form.selectedPlan === 'premium' ? form.premiumTransferSenderName : undefined,
+      premiumTransferNote: form.selectedPlan === 'premium' ? form.premiumTransferNote : undefined,
     }
 
     const result = await register(registerPayload)
@@ -153,6 +182,24 @@ export default function Register() {
       toast('Government ID upload is temporarily unavailable. Account creation can still continue.', { icon: 'ℹ️' })
     }
 
+    if (form.selectedPlan === 'premium') {
+      try {
+        await authService.requestPremiumUpgrade({
+          transferReference: form.premiumTransferReference,
+          transferAmount: form.premiumTransferAmount ? Number(form.premiumTransferAmount) : undefined,
+          transferDate: form.premiumTransferDate || undefined,
+          senderName: form.premiumTransferSenderName || undefined,
+          note: form.premiumTransferNote || undefined,
+          paymentReceipt: premiumReceiptFile,
+        })
+        toast.success('Premium request submitted with receipt. Admin will verify and activate your premium access.')
+      } catch (err) {
+        const message = err.response?.data?.message || 'Account created, but premium request submission failed'
+        toast.error(message)
+        toast('Open your dashboard subscription section to re-submit premium payment details and receipt.', { icon: 'ℹ️' })
+      }
+    }
+
     navigate('/dashboard')
   }
 
@@ -183,6 +230,112 @@ export default function Register() {
               <label className="label">Phone</label>
               <input className="input" value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} />
             </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-700 bg-slate-900/70 p-3 space-y-2">
+            <p className="text-sm font-semibold text-slate-100">Select Plan</p>
+            <div className="grid sm:grid-cols-2 gap-2">
+              <label className={`rounded-lg border px-3 py-2 text-sm cursor-pointer ${form.selectedPlan === 'free' ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 text-slate-300'}`}>
+                <input
+                  type="radio"
+                  name="selectedPlan"
+                  className="mr-2"
+                  checked={form.selectedPlan === 'free'}
+                  onChange={() => setForm((p) => ({ ...p, selectedPlan: 'free' }))}
+                />
+                Free Plan (instant access)
+              </label>
+              <label className={`rounded-lg border px-3 py-2 text-sm cursor-pointer ${form.selectedPlan === 'premium' ? 'border-amber-500 bg-amber-500/10 text-amber-300' : 'border-slate-700 text-slate-300'}`}>
+                <input
+                  type="radio"
+                  name="selectedPlan"
+                  className="mr-2"
+                  checked={form.selectedPlan === 'premium'}
+                  onChange={() => setForm((p) => ({ ...p, selectedPlan: 'premium' }))}
+                />
+                Premium Plan (manual transfer + admin approval)
+              </label>
+            </div>
+
+            {form.selectedPlan === 'premium' && (
+              <div className="rounded-lg border border-amber-600/60 bg-amber-500/10 p-3 space-y-2">
+                <p className="text-xs text-amber-200 font-semibold">Transfer premium fee to this bank account:</p>
+                <p className="text-xs text-amber-100">
+                  Account Name: <span className="font-semibold">{premiumConfig?.bankAccount?.accountName || 'VOV Crime Premium'}</span><br />
+                  Account Number: <span className="font-semibold">{premiumConfig?.bankAccount?.accountNumber || '0000000000'}</span><br />
+                  Bank: <span className="font-semibold">{premiumConfig?.bankAccount?.bankName || 'Your Bank Name'}</span><br />
+                  Amount: <span className="font-semibold">₦{Number(premiumConfig?.amount || 5000).toLocaleString()}</span>
+                </p>
+
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">Transfer Reference *</label>
+                    <input
+                      className="input"
+                      value={form.premiumTransferReference}
+                      onChange={(e) => setForm((p) => ({ ...p, premiumTransferReference: e.target.value }))}
+                      placeholder="e.g. TRF-239482"
+                      required={form.selectedPlan === 'premium'}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Amount Transferred (NGN)</label>
+                    <input
+                      className="input"
+                      type="number"
+                      min="0"
+                      value={form.premiumTransferAmount}
+                      onChange={(e) => setForm((p) => ({ ...p, premiumTransferAmount: e.target.value }))}
+                      placeholder="5000"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">Transfer Date</label>
+                    <input
+                      className="input"
+                      type="date"
+                      value={form.premiumTransferDate}
+                      onChange={(e) => setForm((p) => ({ ...p, premiumTransferDate: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Sender Name</label>
+                    <input
+                      className="input"
+                      value={form.premiumTransferSenderName}
+                      onChange={(e) => setForm((p) => ({ ...p, premiumTransferSenderName: e.target.value }))}
+                      placeholder="Bank account sender"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="label">Note (optional)</label>
+                  <textarea
+                    className="textarea"
+                    rows={2}
+                    value={form.premiumTransferNote}
+                    onChange={(e) => setForm((p) => ({ ...p, premiumTransferNote: e.target.value }))}
+                    placeholder="Any extra payment detail for admin verification"
+                  />
+                </div>
+
+                <div>
+                  <label className="label">Payment Receipt Upload *</label>
+                  <input
+                    className="input"
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={(e) => setPremiumReceiptFile(e.target.files?.[0] || null)}
+                    required={form.selectedPlan === 'premium'}
+                  />
+                  <p className="text-xs text-slate-400 mt-1">Upload transfer receipt (JPG, PNG, WEBP, or PDF). Max size: 5MB.</p>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="grid sm:grid-cols-2 gap-3">

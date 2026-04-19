@@ -23,6 +23,32 @@ const toUploadFile = (file, fallbackName) => {
 
 export const authService = {
   getMe: () => api.get('/auth/me'),
+  getPremiumRequestStatus: () => api.get('/auth/premium/request-status'),
+  requestPremiumUpgrade: ({
+    transferReference,
+    transferAmount,
+    transferDate,
+    senderName,
+    note,
+    paymentReceipt,
+  } = {}) => {
+    const form = new FormData();
+
+    if (transferReference) form.append('transferReference', String(transferReference).trim());
+    if (transferAmount !== undefined && transferAmount !== null && transferAmount !== '') {
+      form.append('transferAmount', String(transferAmount));
+    }
+    if (transferDate) form.append('transferDate', String(transferDate).trim());
+    if (senderName) form.append('senderName', String(senderName).trim());
+    if (note) form.append('note', String(note).trim());
+
+    const uploadFile = toUploadFile(paymentReceipt, 'premium-receipt.jpg');
+    if (uploadFile) form.append('paymentReceipt', uploadFile);
+
+    return api.post('/auth/premium/upgrade-request', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 
   uploadGovernmentId: (file, idCardNumber) => {
     const form = new FormData();

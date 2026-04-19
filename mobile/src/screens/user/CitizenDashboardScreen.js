@@ -1,13 +1,13 @@
-import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Clipboard from 'expo-clipboard';
-import FeatureCard from '../../components/FeatureCard';
 import AppButton from '../../components/AppButton';
 import AppInput from '../../components/AppInput';
 import ScreenContainer from '../../components/ScreenContainer';
 import useApiResource from '../../hooks/useApiResource';
 import { useAuth } from '../../context/AuthContext';
+import { authService } from '../../services/authService';
 import { reportService } from '../../services/reportService';
 import { colors, radius, spacing } from '../../theme/tokens';
 
@@ -80,6 +80,17 @@ export default function CitizenDashboardScreen() {
   const [pickerType, setPickerType] = useState('state');
   const [pickerQuery, setPickerQuery] = useState('');
   const [pickerQueries, setPickerQueries] = useState({ state: '', category: '' });
+  const [premiumRequest, setPremiumRequest] = useState(null);
+  const [premiumStatusLoading, setPremiumStatusLoading] = useState(false);
+  const [premiumSubmitting, setPremiumSubmitting] = useState(false);
+  const [premiumForm, setPremiumForm] = useState({
+    transferReference: '',
+    transferAmount: '',
+    transferDate: getNowDateParts().date,
+    senderName: '',
+    note: '',
+    paymentReceipt: null,
+  });
 
   const { data, loading, error, refetch } = useApiResource(async () => {
     const res = await reportService.getMyReports({ limit: 20 });
@@ -106,6 +117,28 @@ export default function CitizenDashboardScreen() {
     });
     return summary;
   }, [reports]);
+  const hasPremiumAccess = user?.role === 'admin'
+    || user?.premiumPlanActive === true
+    || user?.premiumPlanStatus === 'active'
+    || user?.currentPlan === 'premium';
+  const hasUploadedPremiumReceipt = Boolean(premiumRequest?.paymentReceiptUrl);
+
+  const loadPremiumStatus = async () => {
+    try {
+      setPremiumStatusLoading(true);
+      const { data: premiumData } = await authService.getPremiumRequestStatus();
+      setPremiumRequest(premiumData?.request || null);
+    } catch {
+      setPremiumRequest(null);
+    } finally {
+      setPremiumStatusLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPremiumStatus().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const pickerOptions = useMemo(() => {
     const source = pickerType === 'category' ? CATEGORY_OPTIONS : NIGERIA_STATES;
@@ -237,15 +270,199 @@ export default function CitizenDashboardScreen() {
     }
   };
 
+  const openPremiumReceipt = async () => {
+    const receiptUrl = String(premiumRequest?.paymentReceiptUrl || '').trim();
+    if (!receiptUrl) {
+      Alert.alert('Receipt unavailable', 'No uploaded premium receipt found yet.');
+      return;
+    }
+
+    try {
+      const supported = await Linking.canOpenURL(receiptUrl);
+      if (!supported) {
+        Alert.alert('Open receipt failed', 'This device cannot open the receipt link.');
+        return;
+      }
+
+      await Linking.openURL(receiptUrl);
+    } catch {
+      Alert.alert('Open receipt failed', 'Unable to open the uploaded receipt right now.');
+    }
+  };
+
+  const setPremiumField = (key, value) => {
+    setPremiumForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const pickPremiumReceipt = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['image/*', 'application/pdf'],
+        multiple: false,
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) return;
+
+      const selected = Array.isArray(result.assets) ? result.assets[0] : null;
+      if (!selected) return;
+
+      setPremiumField('paymentReceipt', selected);
+      Alert.alert('Receipt selected', selected.name || 'Receipt file selected successfully.');
+    } catch {
+      Alert.alert('Receipt selection', 'Unable to open receipt picker right now.');
+    }
+  };
+
+  const submitPremiumRequest = async () => {
+    if (hasPremiumAccess) {
+      Alert.alert('Premium active', 'Premium access is already active on this account.');
+      return;
+    }
+
+    const transferReference = String(premiumForm.transferReference || '').trim();
+    if (!transferReference) {
+      Alert.alert('Missing transfer reference', 'Please enter your transfer reference.');
+      return;
+    }
+
+    if (!premiumForm.paymentReceipt) {
+      Alert.alert('Missing receipt', 'Please upload your payment receipt before submitting.');
+      return;
+    }
+
+    try {
+      setPremiumSubmitting(true);
+      await authService.requestPremiumUpgrade({
+        transferReference,
+        transferAmount: premiumForm.transferAmount ? Number(premiumForm.transferAmount) : undefined,
+        transferDate: String(premiumForm.transferDate || '').trim() || undefined,
+        senderName: String(premiumForm.senderName || '').trim() || undefined,
+        note: String(premiumForm.note || '').trim() || undefined,
+        paymentReceipt: premiumForm.paymentReceipt,
+      });
+
+      Alert.alert('Premium request submitted', 'Your receipt and transfer details were submitted for admin verification.');
+      setPremiumForm({
+        transferReference: '',
+        transferAmount: '',
+        transferDate: getNowDateParts().date,
+        senderName: '',
+        note: '',
+        paymentReceipt: null,
+      });
+      await loadPremiumStatus();
+    } catch (err) {
+      Alert.alert('Submission failed', err?.response?.data?.message || 'Unable to submit premium request.');
+    } finally {
+      setPremiumSubmitting(false);
+    }
+  };
+
   return (
     <ScreenContainer title="Citizen Dashboard" subtitle="Your reports and account activity.">
       {loading ? <ActivityIndicator color="#22d3ee" /> : null}
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-      <FeatureCard label="Total reports" value={String(reports.length)} />
-      <FeatureCard label="Pending" value={String(statusSummary.pending)} />
-      <FeatureCard label="In progress" value={String(statusSummary.in_progress)} />
-      <FeatureCard label="Solved" value={String(statusSummary.solved)} />
+      <View style={styles.heroCard}>
+        <Text style={styles.heroTitle}>Welcome back, {user?.name || 'Citizen'}</Text>
+        <Text style={styles.heroSubtitle}>Track incidents, upload evidence, and monitor case progress in one place.</Text>
+      </View>
+
+      <View style={styles.kpiGrid}>
+        <View style={[styles.kpiCard, styles.kpiIndigo]}>
+          <Text style={styles.kpiLabel}>Total Reports</Text>
+          <Text style={styles.kpiValue}>{String(reports.length)}</Text>
+        </View>
+        <View style={[styles.kpiCard, styles.kpiAmber]}>
+          <Text style={styles.kpiLabel}>Pending</Text>
+          <Text style={styles.kpiValue}>{String(statusSummary.pending)}</Text>
+        </View>
+        <View style={[styles.kpiCard, styles.kpiSky]}>
+          <Text style={styles.kpiLabel}>In Progress</Text>
+          <Text style={styles.kpiValue}>{String(statusSummary.in_progress)}</Text>
+        </View>
+        <View style={[styles.kpiCard, styles.kpiEmerald]}>
+          <Text style={styles.kpiLabel}>Solved</Text>
+          <Text style={styles.kpiValue}>{String(statusSummary.solved)}</Text>
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Subscription Plan</Text>
+        <Text style={styles.planText}>
+          Current plan: <Text style={styles.planValue}>{user?.currentPlan || 'free'}</Text>
+          {'  ·  '}
+          Premium status: <Text style={styles.planValue}>{user?.premiumPlanStatus || 'none'}</Text>
+        </Text>
+
+        {hasPremiumAccess ? (
+          <Text style={styles.premiumActive}>✅ Premium access is active.</Text>
+        ) : null}
+
+        {premiumStatusLoading ? <ActivityIndicator color="#22d3ee" /> : null}
+
+        {premiumRequest ? (
+          <View style={styles.receiptRow}>
+            <View style={[styles.receiptBadge, hasUploadedPremiumReceipt ? styles.receiptBadgeSuccess : styles.receiptBadgeWarning]}>
+              <Text style={[styles.receiptBadgeText, hasUploadedPremiumReceipt ? styles.receiptBadgeTextSuccess : styles.receiptBadgeTextWarning]}>
+                {hasUploadedPremiumReceipt ? '✅ Receipt uploaded successfully' : '⚠️ Receipt not uploaded'}
+              </Text>
+            </View>
+
+            {hasUploadedPremiumReceipt ? (
+              <AppButton title="View Uploaded Receipt" variant="secondary" onPress={openPremiumReceipt} />
+            ) : null}
+          </View>
+        ) : null}
+
+        {!hasPremiumAccess ? (
+          <View style={styles.premiumFormWrap}>
+            <Text style={styles.sectionLabel}>Submit Premium Payment Details</Text>
+            <AppInput
+              placeholder="Transfer Reference *"
+              value={premiumForm.transferReference}
+              onChangeText={(value) => setPremiumField('transferReference', value)}
+            />
+            <AppInput
+              placeholder="Amount Transferred (NGN)"
+              value={premiumForm.transferAmount}
+              onChangeText={(value) => setPremiumField('transferAmount', value)}
+              keyboardType="numeric"
+            />
+            <AppInput
+              placeholder="Transfer Date (YYYY-MM-DD)"
+              value={premiumForm.transferDate}
+              onChangeText={(value) => setPremiumField('transferDate', value)}
+              autoCapitalize="none"
+            />
+            <AppInput
+              placeholder="Sender Name"
+              value={premiumForm.senderName}
+              onChangeText={(value) => setPremiumField('senderName', value)}
+            />
+            <AppInput
+              placeholder="Note (optional)"
+              value={premiumForm.note}
+              onChangeText={(value) => setPremiumField('note', value)}
+              multiline
+              numberOfLines={3}
+            />
+
+            <AppButton
+              title={premiumForm.paymentReceipt?.name ? `Receipt: ${premiumForm.paymentReceipt.name}` : 'Upload Payment Receipt *'}
+              variant="secondary"
+              onPress={pickPremiumReceipt}
+            />
+
+            <AppButton
+              title={premiumSubmitting ? 'Submitting premium request...' : 'Submit Premium Request'}
+              onPress={submitPremiumRequest}
+              disabled={premiumSubmitting}
+            />
+          </View>
+        ) : null}
+      </View>
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Submit Incident Report</Text>
@@ -453,6 +670,113 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontWeight: '800',
     fontSize: 16,
+  },
+  heroCard: {
+    backgroundColor: '#1e1b38',
+    borderWidth: 1,
+    borderColor: '#4f46e5',
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  heroTitle: {
+    color: '#c4b5fd',
+    fontWeight: '900',
+    fontSize: 18,
+  },
+  heroSubtitle: {
+    color: '#cbd5e1',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  kpiGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  kpiCard: {
+    width: '48%',
+    borderWidth: 1,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: 4,
+  },
+  kpiIndigo: {
+    borderColor: '#6366f1',
+    backgroundColor: '#1f2340',
+  },
+  kpiAmber: {
+    borderColor: '#f59e0b',
+    backgroundColor: '#30230f',
+  },
+  kpiSky: {
+    borderColor: '#0ea5e9',
+    backgroundColor: '#132a38',
+  },
+  kpiEmerald: {
+    borderColor: '#10b981',
+    backgroundColor: '#102c25',
+  },
+  kpiLabel: {
+    color: '#cbd5e1',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  kpiValue: {
+    color: '#f8fafc',
+    fontWeight: '900',
+    fontSize: 22,
+  },
+  planText: {
+    color: colors.textSecondary,
+    fontSize: 13,
+  },
+  planValue: {
+    color: colors.textPrimary,
+    fontWeight: '700',
+    textTransform: 'capitalize',
+  },
+  premiumActive: {
+    color: '#6ee7b7',
+    fontWeight: '700',
+  },
+  receiptRow: {
+    gap: spacing.sm,
+  },
+  premiumFormWrap: {
+    marginTop: spacing.sm,
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+  },
+  receiptBadge: {
+    borderWidth: 1,
+    borderRadius: radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    alignSelf: 'flex-start',
+  },
+  receiptBadgeSuccess: {
+    borderColor: '#34d399',
+    backgroundColor: '#163126',
+  },
+  receiptBadgeWarning: {
+    borderColor: '#fca5a5',
+    backgroundColor: '#3b1c1c',
+  },
+  receiptBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  receiptBadgeTextSuccess: {
+    color: '#6ee7b7',
+  },
+  receiptBadgeTextWarning: {
+    color: '#fda4af',
   },
   sectionLabel: {
     color: colors.textSecondary,

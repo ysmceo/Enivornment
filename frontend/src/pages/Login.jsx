@@ -3,6 +3,22 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { Eye, EyeOff, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import Modal from '../components/Modal'
+
+const POST_LOGIN_MESSAGE = `VOICE OF THE VOICELESS
+
+Where silence ends and truth begins.
+
+We stand for those who cannot speak,
+we fight for those who are unheard,
+and we shine light where darkness hides.
+
+This platform empowers you to report incidents,
+share real-time information, and connect to live updates that matter.
+
+Every voice counts. Every report matters.
+
+Speak. Report. Be Heard.`
 
 export default function Login() {
   const navigate = useNavigate()
@@ -13,6 +29,14 @@ export default function Login() {
   const [showPwd, setShowPwd] = useState(false)
   const [showSecret, setShowSecret] = useState(false)
   const [adminMode, setAdminMode] = useState(false)
+  const [welcomeOpen, setWelcomeOpen] = useState(false)
+  const [nextPath, setNextPath] = useState('/dashboard')
+
+  const continueToDestination = () => {
+    setWelcomeOpen(false)
+    toast.success('Welcome back!')
+    navigate(nextPath, { replace: true })
+  }
 
   const onSubmit = async (e) => {
     e.preventDefault()
@@ -27,10 +51,10 @@ export default function Login() {
       return
     }
 
-    toast.success('Welcome back!')
     const from = location.state?.from?.pathname
-    if (from) navigate(from, { replace: true })
-    else navigate(result.user?.role === 'admin' ? '/admin' : '/dashboard')
+    const destination = from || (result.user?.role === 'admin' ? '/admin' : '/dashboard')
+    setNextPath(destination)
+    setWelcomeOpen(true)
   }
 
   return (
@@ -156,6 +180,37 @@ export default function Login() {
           </button>
         </div>
       </section>
+
+      <Modal
+        open={welcomeOpen}
+        onClose={continueToDestination}
+        title="VOICE OF THE VOICELESS"
+        size="md"
+        footer={(
+          <button
+            type="button"
+            onClick={continueToDestination}
+            className="inline-flex items-center rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500 transition-colors"
+          >
+            Continue to Dashboard
+          </button>
+        )}
+      >
+        <div className="space-y-4 rounded-2xl border border-violet-500/30 bg-gradient-to-br from-slate-900 to-slate-800 p-5">
+          <p className="text-violet-100 font-semibold italic">Where silence ends and truth begins.</p>
+          <p className="text-slate-200 leading-relaxed">
+            We stand for those who cannot speak,<br />
+            we fight for those who are unheard,<br />
+            and we shine light where darkness hides.
+          </p>
+          <p className="text-slate-200 leading-relaxed">
+            This platform empowers you to report incidents,
+            share real-time information, and connect to live updates that matter.
+          </p>
+          <p className="text-slate-100 font-semibold">Every voice counts. Every report matters.</p>
+          <p className="text-violet-200 font-bold tracking-wide">Speak. Report. Be Heard.</p>
+        </div>
+      </Modal>
     </main>
   )
 }

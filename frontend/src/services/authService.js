@@ -5,6 +5,24 @@ export const authService = {
   login:    (data)            => api.post('/auth/login', data),
   logout:   ()                => api.post('/auth/logout'),
   getMe:    ()                => api.get('/auth/me'),
+  getPremiumConfig: ()        => api.get('/auth/premium-config'),
+  getPremiumRequestStatus: () => api.get('/auth/premium/request-status'),
+  requestPremiumUpgrade: (data = {}) => {
+    const form = new FormData();
+
+    if (data.transferReference) form.append('transferReference', data.transferReference);
+    if (data.transferAmount !== undefined && data.transferAmount !== null && data.transferAmount !== '') {
+      form.append('transferAmount', String(data.transferAmount));
+    }
+    if (data.transferDate) form.append('transferDate', data.transferDate);
+    if (data.senderName) form.append('senderName', data.senderName);
+    if (data.note) form.append('note', data.note);
+    if (data.paymentReceipt) form.append('paymentReceipt', data.paymentReceipt);
+
+    return api.post('/auth/premium/upgrade-request', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
   updateProfile: (data)       => api.put('/auth/update-profile', data),
   changePassword: (data)      => api.put('/auth/change-password', data),
   forgotPassword: (data)      => api.post('/auth/forgot-password', data),

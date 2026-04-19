@@ -137,6 +137,23 @@ const uploadProfilePhoto = multer({
   fileFilter: buildFileFilter(ALLOWED_IMAGE_TYPES),
 }).single('profilePhoto');
 
+// ─── Premium payment receipt upload ──────────────────────────────────────
+const premiumReceiptStorage = new CloudinaryStorage({
+  cloudinary,
+  params: async (req) => ({
+    folder: 'vov-crime/premium-receipts',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+    resource_type: 'auto',
+    tags: [`user_${req.user?._id}`],
+  }),
+});
+
+const uploadPremiumReceipt = multer({
+  storage: premiumReceiptStorage,
+  limits: { fileSize: MAX_DOC_SIZE, files: 1 },
+  fileFilter: buildFileFilter(ALLOWED_DOC_TYPES),
+}).single('paymentReceipt');
+
 // ─── Report media upload ───────────────────────────────────────────────────
 // Images and videos; up to 10 files per report.
 const mediaStorage = new CloudinaryStorage({
@@ -190,6 +207,7 @@ module.exports = {
   uploadGovernmentId,
   uploadSelfie,
   uploadProfilePhoto,
+  uploadPremiumReceipt,
   uploadMedia,
   handleUpload,
   ensureCloudinaryUploadConfigured,

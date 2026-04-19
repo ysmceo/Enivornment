@@ -64,6 +64,9 @@ export const userService = {
   getAdminNotifications: (params) => api.get('/admin/notifications', { params }),
   markAdminNotificationRead: (id) => api.patch(`/admin/notifications/${id}/read`),
   markAllAdminNotificationsRead: () => api.patch('/admin/notifications/read-all'),
+  getPremiumUpgradeRequests: (params) => api.get('/admin/premium-requests', { params }),
+  approvePremiumUpgradeRequest: (id, data) => api.patch(`/admin/premium-requests/${id}/approve`, data),
+  rejectPremiumUpgradeRequest: (id, data) => api.patch(`/admin/premium-requests/${id}/reject`, data),
 };
 
 export const streamService = {

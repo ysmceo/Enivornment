@@ -131,12 +131,12 @@ export default function AdminReports() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-900">
+    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-indigo-50/40 to-violet-50/40 dark:from-slate-900 dark:via-indigo-950/10 dark:to-violet-950/10">
       <AdminSidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-16 px-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <header className="h-16 px-6 bg-gradient-to-r from-white to-indigo-50/60 dark:from-slate-900 dark:to-indigo-950/20 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <div>
-            <h1 className="font-extrabold">Report Moderation</h1>
+            <h1 className="font-extrabold bg-gradient-to-r from-indigo-700 to-violet-700 dark:from-indigo-300 dark:to-violet-300 bg-clip-text text-transparent">Report Moderation</h1>
             <p className="text-xs text-slate-500 dark:text-slate-400">Simple, focused workflow for review and resolution</p>
           </div>
           <ThemeToggle />
@@ -147,25 +147,25 @@ export default function AdminReports() {
           {error && <Alert type="error" message={error} onClose={() => setError('')} />}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="card p-3">
+            <div className="card p-3 border border-indigo-400/25 bg-gradient-to-br from-indigo-500/10 to-transparent shadow-sm">
               <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Total</p>
               <p className="mt-1 text-xl font-extrabold text-slate-900 dark:text-white">{reportStats.total}</p>
             </div>
-            <div className="card p-3">
+            <div className="card p-3 border border-amber-400/25 bg-gradient-to-br from-amber-500/10 to-transparent shadow-sm">
               <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Pending</p>
               <p className="mt-1 text-xl font-extrabold text-amber-600 dark:text-amber-400">{reportStats.pending}</p>
             </div>
-            <div className="card p-3">
+            <div className="card p-3 border border-cyan-400/25 bg-gradient-to-br from-cyan-500/10 to-transparent shadow-sm">
               <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">In Review</p>
               <p className="mt-1 text-xl font-extrabold text-indigo-600 dark:text-indigo-400">{reportStats.underReview}</p>
             </div>
-            <div className="card p-3">
+            <div className="card p-3 border border-emerald-400/25 bg-gradient-to-br from-emerald-500/10 to-transparent shadow-sm">
               <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Resolved</p>
               <p className="mt-1 text-xl font-extrabold text-emerald-600 dark:text-emerald-400">{reportStats.resolved}</p>
             </div>
           </div>
 
-          <div className="card p-4 flex flex-wrap gap-3 items-center">
+          <div className="card p-4 flex flex-wrap gap-3 items-center border border-violet-400/20 bg-gradient-to-r from-violet-500/10 to-transparent">
             <div className="relative flex-1 min-w-[220px]">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input className="input pl-9" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search case ID, email, title, description" />

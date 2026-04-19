@@ -104,6 +104,23 @@ const registerValidation = [
 
       return true;
     }),
+
+  body('selectedPlan')
+    .optional({ nullable: true })
+    .isIn(['free', 'premium']).withMessage('selectedPlan must be either free or premium'),
+
+  body('premiumTransferReference')
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
+    .isLength({ min: 4, max: 120 }).withMessage('Premium transfer reference must be between 4 and 120 characters'),
+
+  body('premiumTransferAmount')
+    .optional({ nullable: true, checkFalsy: true })
+    .isFloat({ min: 0 }).withMessage('Premium transfer amount must be a valid positive amount'),
+
+  body('premiumTransferDate')
+    .optional({ nullable: true, checkFalsy: true })
+    .isISO8601().withMessage('Premium transfer date must be a valid date'),
 ];
 
 const loginValidation = [
@@ -255,6 +272,38 @@ const mongoIdParamValidation = (paramName = 'id') => [
   param(paramName).isMongoId().withMessage(`Invalid ${paramName}`),
 ];
 
+const premiumUpgradeRequestValidation = [
+  body('transferReference')
+    .trim()
+    .notEmpty().withMessage('Transfer reference is required')
+    .isLength({ min: 4, max: 120 }).withMessage('Transfer reference must be between 4 and 120 characters'),
+  body('transferAmount')
+    .optional({ nullable: true, checkFalsy: true })
+    .isFloat({ min: 0 }).withMessage('Transfer amount must be a valid positive amount'),
+  body('transferDate')
+    .optional({ nullable: true, checkFalsy: true })
+    .isISO8601().withMessage('Transfer date must be a valid date'),
+  body('senderName')
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
+    .isLength({ max: 120 }).withMessage('Sender name cannot exceed 120 characters'),
+  body('note')
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
+    .isLength({ max: 1000 }).withMessage('Note cannot exceed 1000 characters'),
+];
+
+const premiumUpgradeReviewValidation = [
+  body('adminNote')
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
+    .isLength({ max: 1000 }).withMessage('Admin note cannot exceed 1000 characters'),
+  body('reason')
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
+    .isLength({ max: 1000 }).withMessage('Rejection reason cannot exceed 1000 characters'),
+];
+
 const emergencyContactValidation = [
   body('state')
     .notEmpty().withMessage('State is required')
@@ -295,4 +344,6 @@ module.exports = {
   requestMoreEvidenceValidation,
   submitAdditionalEvidenceValidation,
   emergencyContactValidation,
+  premiumUpgradeRequestValidation,
+  premiumUpgradeReviewValidation,
 };

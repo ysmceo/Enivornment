@@ -10,6 +10,7 @@ import { useSocket } from '../hooks/useSocket'
 const LIMIT = 50
 
 const INITIAL_FORM = {
+  scope: 'state',
   name: '',
   agency: '',
   state: '',
@@ -44,6 +45,7 @@ export default function AdminEmergencyContacts() {
   const [typeFilter, setTypeFilter] = useState('all')
   const [activeFilter, setActiveFilter] = useState('all')
   const [verifiedFilter, setVerifiedFilter] = useState('all')
+  const [scopeFilter, setScopeFilter] = useState('all')
 
   const [page, setPage] = useState(1)
   const [pagination, setPagination] = useState({ page: 1, limit: LIMIT, total: 0, pages: 1 })
@@ -68,6 +70,7 @@ export default function AdminEmergencyContacts() {
       : [contact.phonePrimary, contact.phoneSecondary].filter(Boolean)
 
     setForm({
+      scope: contact.scope || 'state',
       name: contact.name || '',
       agency: contact.agency || '',
       state: contact.state || '',
@@ -93,7 +96,8 @@ export default function AdminEmergencyContacts() {
     authorityType: typeFilter !== 'all' ? typeFilter : undefined,
     active: activeFilter !== 'all' ? activeFilter : undefined,
     verifiedOnly: verifiedFilter !== 'all' ? verifiedFilter : undefined,
-  }), [page, search, stateFilter, regionFilter, typeFilter, activeFilter, verifiedFilter])
+    scope: scopeFilter !== 'all' ? scopeFilter : undefined,
+  }), [page, search, stateFilter, regionFilter, typeFilter, activeFilter, verifiedFilter, scopeFilter])
 
   const loadMetadata = useCallback(async () => {
     const { data } = await platformService.getMetadata()
@@ -155,6 +159,7 @@ export default function AdminEmergencyContacts() {
     setTypeFilter('all')
     setActiveFilter('all')
     setVerifiedFilter('all')
+    setScopeFilter('all')
     setPage(1)
     setLoading(true)
     try {
@@ -179,6 +184,24 @@ export default function AdminEmergencyContacts() {
   const openCreateModal = () => {
     setEditing(null)
     hydrateForm(null)
+    setModalOpen(true)
+  }
+
+  const openUniversalArmedForcesModal = () => {
+    setEditing(null)
+    setForm({
+      ...INITIAL_FORM,
+      scope: 'national',
+      authorityType: 'military',
+      name: 'Nigerian Armed Forces (Universal Response)',
+      agency: 'Nigerian Armed Forces (Universal Response)',
+      region: 'National',
+      state: '',
+      phonePrimary: '193',
+      phoneNumbers: '193',
+      isVerifiedOfficial: true,
+      active: true,
+    })
     setModalOpen(true)
   }
 
@@ -207,10 +230,11 @@ export default function AdminEmergencyContacts() {
     }
 
     return {
+      scope: form.scope || 'state',
       name: form.name.trim(),
       agency: form.agency.trim(),
-      state: form.state,
-      region: form.region || undefined,
+      state: form.scope === 'national' ? undefined : form.state,
+      region: form.scope === 'national' ? 'National' : (form.region || undefined),
       authorityType: form.authorityType,
       category: form.category || 'public_safety',
       phonePrimary: form.phonePrimary.trim(),
@@ -225,8 +249,8 @@ export default function AdminEmergencyContacts() {
 
   const submitForm = async () => {
     const payload = normalizePayload()
-    if (!payload.name || !payload.agency || !payload.state || !payload.phonePrimary) {
-      setError('Name, agency, state, and primary phone are required')
+    if (!payload.name || !payload.agency || !payload.phonePrimary || (payload.scope !== 'national' && !payload.state)) {
+      setError('Name, agency, primary phone, and state (for state-scoped contacts) are required')
       return
     }
 
@@ -379,6 +403,11 @@ export default function AdminEmergencyContacts() {
                 <option value="true">Verified only</option>
                 <option value="false">Unverified only</option>
               </select>
+              <select className="select" value={scopeFilter} onChange={(e) => setScopeFilter(e.target.value)}>
+                <option value="all">State + national</option>
+                <option value="state">State only</option>
+                <option value="national">National only</option>
+              </select>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -393,6 +422,9 @@ export default function AdminEmergencyContacts() {
               </button>
               <button className="btn-secondary" onClick={() => importFileRef.current?.click()}>
                 <Upload className="w-4 h-4" /> Import CSV
+              </button>
+              <button className="btn-secondary" onClick={openUniversalArmedForcesModal}>
+                <Plus className="w-4 h-4" /> Add universal armed forces
               </button>
               <input
                 ref={importFileRef}
@@ -421,6 +453,7 @@ export default function AdminEmergencyContacts() {
                   <tr>
                     <th className="table-th">Agency / Contact</th>
                     <th className="table-th">State</th>
+                    <th className="table-th">Scope</th>
                     <th className="table-th">Region</th>
                     <th className="table-th">Type</th>
                     <th className="table-th">Phones</th>
@@ -431,11 +464,11 @@ export default function AdminEmergencyContacts() {
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td className="table-td" colSpan={7}>Loading contacts…</td>
+                      <td className="table-td" colSpan={8}>Loading contacts…</td>
                     </tr>
                   ) : contacts.length === 0 ? (
                     <tr>
-                      <td className="table-td" colSpan={7}>No emergency contacts found for current filters.</td>
+                      <td className="table-td" colSpan={8}>No emergency contacts found for current filters.</td>
                     </tr>
                   ) : contacts.map((contact) => (
                     <tr key={contact._id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
@@ -443,7 +476,8 @@ export default function AdminEmergencyContacts() {
                         <p className="font-semibold text-slate-900 dark:text-slate-100">{contact.agency || contact.name}</p>
                         <p className="text-xs text-slate-500">{contact.name}</p>
                       </td>
-                      <td className="table-td">{contact.state}</td>
+                      <td className="table-td">{contact.state || '-'}</td>
+                      <td className="table-td">{contact.scope === 'national' ? 'National' : 'State'}</td>
                       <td className="table-td">{contact.region || '-'}</td>
                       <td className="table-td">{authorityLabel(contact.authorityType)}</td>
                       <td className="table-td">
@@ -514,6 +548,13 @@ export default function AdminEmergencyContacts() {
       >
         <div className="grid md:grid-cols-2 gap-3">
           <div>
+            <label className="label">Contact scope</label>
+            <select className="select" value={form.scope} onChange={(e) => onFormChange('scope', e.target.value)}>
+              <option value="state">State</option>
+              <option value="national">National (universal)</option>
+            </select>
+          </div>
+          <div>
             <label className="label">Contact name *</label>
             <input className="input" value={form.name} onChange={(e) => onFormChange('name', e.target.value)} />
           </div>
@@ -523,17 +564,25 @@ export default function AdminEmergencyContacts() {
           </div>
           <div>
             <label className="label">State *</label>
-            <select className="select" value={form.state} onChange={(e) => onFormChange('state', e.target.value)}>
-              <option value="">Select a state</option>
-              {states.map((state) => <option key={state} value={state}>{state}</option>)}
-            </select>
+            {form.scope === 'national' ? (
+              <input className="input" value="National / All States" disabled readOnly />
+            ) : (
+              <select className="select" value={form.state} onChange={(e) => onFormChange('state', e.target.value)}>
+                <option value="">Select a state</option>
+                {states.map((state) => <option key={state} value={state}>{state}</option>)}
+              </select>
+            )}
           </div>
           <div>
             <label className="label">Region</label>
-            <select className="select" value={form.region} onChange={(e) => onFormChange('region', e.target.value)}>
-              <option value="">Auto from state</option>
-              {regions.map((region) => <option key={region} value={region}>{region}</option>)}
-            </select>
+            {form.scope === 'national' ? (
+              <input className="input" value="National" disabled readOnly />
+            ) : (
+              <select className="select" value={form.region} onChange={(e) => onFormChange('region', e.target.value)}>
+                <option value="">Auto from state</option>
+                {regions.map((region) => <option key={region} value={region}>{region}</option>)}
+              </select>
+            )}
           </div>
           <div>
             <label className="label">Authority type</label>

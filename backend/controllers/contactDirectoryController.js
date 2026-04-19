@@ -22,6 +22,15 @@ const DEFAULT_HOTLINES_BY_TYPE = {
   military: ['193'],
 };
 
+const UNIVERSAL_ARMED_FORCES_NAME = 'Nigerian Armed Forces (Universal Response)';
+const UNIVERSAL_SCOPE = 'national';
+
+const CSV_HEADERS = [
+  '_id', 'scope', 'name', 'agency', 'state', 'region', 'authorityType', 'category',
+  'phonePrimary', 'phoneSecondary', 'phoneNumbers', 'email', 'address',
+  'active', 'isVerifiedOfficial', 'sourceUrl', 'lastVerifiedAt', 'lat', 'lng', 'notes',
+];
+
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 const GOOGLE_STATE_ALIASES = {
   'Federal Capital Territory': 'FCT',
@@ -34,6 +43,19 @@ const parseNumeric = (value) => {
   const num = Number(value);
   return Number.isFinite(num) ? num : null;
 };
+
+const parseBoolean = (value, fallback = false) => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    if (value.toLowerCase() === 'true') return true;
+    if (value.toLowerCase() === 'false') return false;
+  }
+  return fallback;
+};
+
+const normalizeScope = (value) => (String(value || 'state').toLowerCase() === UNIVERSAL_SCOPE ? UNIVERSAL_SCOPE : 'state');
+
+const isNationalContact = (contact = {}) => normalizeScope(contact.scope || contact.contactScope) === UNIVERSAL_SCOPE;
 
 const normalizeStateName = (value) => {
   if (!value) return null;
@@ -113,15 +135,22 @@ const normalizeContactOutput = (contact = {}) => {
   const phonePrimary = contact.phonePrimary || contact.phoneNumber || phoneNumbers[0] || null;
   const phoneSecondary = contact.phoneSecondary || contact.alternatePhone || phoneNumbers[1] || null;
   const agencyName = contact.agencyName || contact.agency || contact.name || 'Emergency Authority';
+  const scope = normalizeScope(contact.scope);
+  const state = scope === UNIVERSAL_SCOPE ? null : contact.state;
+  const region = scope === UNIVERSAL_SCOPE
+    ? 'National'
+    : (contact.region || STATE_TO_REGION[contact.state] || 'North Central');
 
   return {
     ...contact,
     name: contact.name || agencyName,
     agency: contact.agency || agencyName,
     agencyName,
+    scope,
     authorityType,
     type: authorityType,
-    region: contact.region || STATE_TO_REGION[contact.state] || 'North Central',
+    state,
+    region,
     phonePrimary,
     phoneSecondary,
     phoneNumber: phonePrimary,
@@ -169,6 +198,7 @@ const buildVirtualEntry = ({ state, authorityType, region }) => {
   const phones = DEFAULT_HOTLINES_BY_TYPE[authorityType] || ['112'];
   return normalizeContactOutput({
     _id: `virtual-${state}-${authorityType}`,
+    scope: 'state',
     name: DEFAULT_AGENCY_BY_TYPE[authorityType],
     agency: DEFAULT_AGENCY_BY_TYPE[authorityType],
     agencyName: DEFAULT_AGENCY_BY_TYPE[authorityType],
@@ -187,6 +217,29 @@ const buildVirtualEntry = ({ state, authorityType, region }) => {
     active: true,
     isVerifiedOfficial: true,
     isVirtual: true,
+    sourceUrl: null,
+  });
+};
+
+const buildUniversalArmedForcesEntry = ({ state = null, isVirtual = true } = {}) => {
+  const phones = DEFAULT_HOTLINES_BY_TYPE.military || ['193'];
+  return normalizeContactOutput({
+    _id: isVirtual ? 'virtual-national-military' : undefined,
+    scope: UNIVERSAL_SCOPE,
+    name: UNIVERSAL_ARMED_FORCES_NAME,
+    agency: UNIVERSAL_ARMED_FORCES_NAME,
+    agencyName: UNIVERSAL_ARMED_FORCES_NAME,
+    state,
+    region: 'National',
+    authorityType: 'military',
+    type: 'military',
+    category: 'public_safety',
+    phonePrimary: phones[0],
+    phoneSecondary: phones[1] || null,
+    phoneNumbers: phones,
+    active: true,
+    isVerifiedOfficial: true,
+    isVirtual,
     sourceUrl: null,
   });
 };
@@ -215,19 +268,23 @@ const normalizeAuthorityTypeQuery = (value) => {
 };
 
 const buildAdminPayload = (body = {}, userId = null) => {
+  const scope = normalizeScope(body.scope || body.contactScope);
   const authorityType = normalizeAuthorityType(body);
-  const state = normalizeStateName(body.state) || body.state;
+  const state = scope === UNIVERSAL_SCOPE ? null : (normalizeStateName(body.state) || body.state);
   const phoneNumbers = Array.isArray(body.phoneNumbers)
     ? [...new Set(body.phoneNumbers.filter(Boolean))]
     : normalizePhoneNumbers(body);
 
+  const defaultNationalName = scope === UNIVERSAL_SCOPE && authorityType === 'military' ? UNIVERSAL_ARMED_FORCES_NAME : undefined;
+
   const payload = {
     ...body,
-    name: body.name || body.agencyName || body.agency,
-    agency: body.agency || body.agencyName || body.name,
+    scope,
+    name: body.name || body.agencyName || body.agency || defaultNationalName,
+    agency: body.agency || body.agencyName || body.name || defaultNationalName,
     state,
     authorityType,
-    region: body.region || STATE_TO_REGION[state] || null,
+    region: scope === UNIVERSAL_SCOPE ? 'National' : (body.region || STATE_TO_REGION[state] || null),
     phonePrimary: body.phonePrimary || body.phoneNumber || phoneNumbers[0] || null,
     phoneSecondary: body.phoneSecondary || body.alternatePhone || phoneNumbers[1] || null,
     phoneNumbers,
@@ -310,7 +367,12 @@ const getEmergencyDirectory = async (req, res) => {
     const verifiedOnly = String(req.query.verifiedOnly || 'true') === 'true';
 
     const filter = { active: true };
-    if (stateFilter) filter.state = stateFilter;
+    if (stateFilter) {
+      filter.$or = [
+        { state: stateFilter },
+        { scope: UNIVERSAL_SCOPE },
+      ];
+    }
     if (regionFilter) filter.region = regionFilter;
     if (authorityTypeFilter) filter.authorityType = authorityTypeFilter;
     if (verifiedOnly) filter.isVerifiedOfficial = true;
@@ -329,6 +391,7 @@ const getEmergencyDirectory = async (req, res) => {
     const allEntries = normalizedDbContacts.filter((entry) => matchesSearch(entry, searchLower));
 
     const dbStateTypeCounts = new Set(normalizedDbContacts.map((contact) => `${contact.state}::${contact.authorityType}`));
+    const nationalMilitaryExists = normalizedDbContacts.some((entry) => isNationalContact(entry) && entry.authorityType === 'military');
 
     statesToInclude.forEach((state) => {
       const region = STATE_TO_REGION[state] || 'North Central';
@@ -341,7 +404,20 @@ const getEmergencyDirectory = async (req, res) => {
       });
     });
 
+    const shouldIncludeUniversalArmedForces = !authorityTypeFilter || authorityTypeFilter === 'military';
+    if (shouldIncludeUniversalArmedForces && !nationalMilitaryExists) {
+      const universalEntry = buildUniversalArmedForcesEntry({ state: stateFilter || inferredState || 'FCT', isVirtual: true });
+      if (matchesSearch(universalEntry, searchLower)) {
+        allEntries.push(universalEntry);
+      }
+    }
+
+    const nationalContacts = allEntries.filter((entry) => isNationalContact(entry));
+
     allEntries.sort((a, b) => {
+      const aNational = isNationalContact(a) ? 0 : 1;
+      const bNational = isNationalContact(b) ? 0 : 1;
+      if (aNational !== bNational) return aNational - bNational;
       if (userState) {
         const aScore = a.state === userState ? 0 : 1;
         const bScore = b.state === userState ? 0 : 1;
@@ -353,7 +429,8 @@ const getEmergencyDirectory = async (req, res) => {
 
     const groupedByState = statesToInclude
       .map((state) => {
-        const items = allEntries.filter((entry) => entry.state === state);
+        const scopedItems = allEntries.filter((entry) => entry.state === state);
+        const items = [...nationalContacts, ...scopedItems];
         if (!items.length) return null;
         return {
           state,
@@ -370,6 +447,7 @@ const getEmergencyDirectory = async (req, res) => {
     res.status(200).json({
       success: true,
       contacts: allEntries.map((entry) => redactPhoneFields(entry)),
+      nationalContacts: nationalContacts.map((entry) => redactPhoneFields(entry)),
       groupedByState,
       states: NIGERIA_STATES,
       regions: NIGERIA_REGIONS,
@@ -407,6 +485,7 @@ const getNearbyAuthorities = async (req, res) => {
     const normalizedContacts = dbContacts.map((contact) => normalizeContactOutput({ ...contact, isVirtual: false }));
 
     const contactsToMeasure = [...normalizedContacts];
+    const hasNationalMilitary = normalizedContacts.some((entry) => isNationalContact(entry) && entry.authorityType === 'military');
     if (detectedState) {
       const stateContacts = normalizedContacts.filter((contact) => contact.state === detectedState);
       const stateTypeSet = new Set(stateContacts.map((contact) => contact.authorityType));
@@ -421,6 +500,10 @@ const getNearbyAuthorities = async (req, res) => {
           }));
         }
       });
+    }
+
+    if ((!authorityTypeFilter || authorityTypeFilter === 'military') && !hasNationalMilitary) {
+      contactsToMeasure.push(buildUniversalArmedForcesEntry({ state: detectedState || 'FCT', isVirtual: true }));
     }
 
     const nearby = contactsToMeasure
@@ -455,10 +538,12 @@ const adminListEmergencyContacts = async (req, res) => {
 
     const stateFilter = normalizeStateName(req.query.state);
     const authorityTypeFilter = normalizeAuthorityTypeQuery(req.query.authorityType || req.query.type);
+    const scopeFilter = req.query.scope ? normalizeScope(req.query.scope) : null;
 
     const filter = {};
     if (stateFilter) filter.state = stateFilter;
     if (authorityTypeFilter) filter.authorityType = authorityTypeFilter;
+    if (scopeFilter) filter.scope = scopeFilter;
     if (req.query.region && req.query.region !== 'all') filter.region = req.query.region;
     if (req.query.search) {
       const q = String(req.query.search);
@@ -499,9 +584,11 @@ const adminExportEmergencyContactsCsv = async (req, res) => {
     const filter = {};
     const stateFilter = normalizeStateName(req.query.state);
     const authorityTypeFilter = normalizeAuthorityTypeQuery(req.query.authorityType || req.query.type);
+    const scopeFilter = req.query.scope ? normalizeScope(req.query.scope) : null;
 
     if (stateFilter) filter.state = stateFilter;
     if (authorityTypeFilter) filter.authorityType = authorityTypeFilter;
+    if (scopeFilter) filter.scope = scopeFilter;
     if (req.query.region && req.query.region !== 'all') filter.region = req.query.region;
     if (req.query.active === 'true' || req.query.active === 'false') filter.active = req.query.active === 'true';
     if (req.query.verifiedOnly === 'true' || req.query.verifiedOnly === 'false') filter.isVerifiedOfficial = req.query.verifiedOnly === 'true';
@@ -515,6 +602,7 @@ const adminExportEmergencyContactsCsv = async (req, res) => {
       const lng = contact?.location?.coordinates?.[0] ?? '';
       const row = [
         contact._id,
+        contact.scope || 'state',
         contact.name,
         contact.agency,
         contact.state,
@@ -565,6 +653,7 @@ const adminImportEmergencyContactsCsv = async (req, res) => {
         .filter(Boolean);
 
       const payload = buildAdminPayload({
+        scope: row.scope,
         name: row.name,
         agency: row.agency,
         state: normalizeStateName(row.state),
@@ -584,7 +673,7 @@ const adminImportEmergencyContactsCsv = async (req, res) => {
         lng: row.lng,
       }, req.user?._id);
 
-      if (!payload.name || !payload.agency || !payload.state || !payload.phonePrimary) {
+      if (!payload.name || !payload.agency || !payload.phonePrimary || (payload.scope !== UNIVERSAL_SCOPE && !payload.state)) {
         skipped += 1;
         return;
       }
@@ -593,6 +682,7 @@ const adminImportEmergencyContactsCsv = async (req, res) => {
       const filter = identifier
         ? { _id: identifier }
         : {
+          scope: payload.scope || 'state',
             state: payload.state,
             agency: payload.agency,
             authorityType: payload.authorityType,
@@ -663,14 +753,14 @@ const adminCreateEmergencyContact = async (req, res) => {
       action: 'emergency_contact.create',
       entityType: 'emergency_contact',
       entityId: contact._id,
-      metadata: { state: contact.state, category: contact.category },
+      metadata: { state: contact.state || 'National', category: contact.category, scope: contact.scope || 'state' },
     });
 
     const io = req.app.get('io');
     if (io) {
       io.emit('emergency-directory:updated', {
         action: 'created',
-        state: contact.state,
+        state: contact.state || 'National',
         authorityType: contact.authorityType,
         contact: normalizeContactOutput(contact.toObject()),
       });

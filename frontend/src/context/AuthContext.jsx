@@ -204,6 +204,7 @@ export function AuthProvider({ children }) {
       loading,
       bootstrapping,
       isAdmin: user?.role === 'admin',
+      hasPremiumAccess: user?.role === 'admin' || user?.premiumPlanActive === true || user?.premiumPlanStatus === 'active' || user?.currentPlan === 'premium',
       isAuthenticated: !!token,
       verified: user?.idVerificationStatus === 'verified',
       login,

@@ -2,11 +2,14 @@ const User      = require('../models/User');
 const Report    = require('../models/Report');
 const AuditLog = require('../models/AuditLog');
 const Notification = require('../models/Notification');
+const PremiumUpgradeRequest = require('../models/PremiumUpgradeRequest');
 const cloudinary = require('../config/cloudinary');
 const { decrypt } = require('../utils/encryption');
 const { recordAuditLog } = require('../services/auditService');
 const { queueNotification } = require('../services/notificationService');
 const { upsertLawEnforcementCase } = require('../services/lawEnforcementService');
+
+const getPremiumStreamCode = () => String(process.env.PREMIUM_STREAM_CODE || '2026').trim();
 
 const getReadableStatus = (status) => {
   if (status === 'in_progress') return 'in progress';
@@ -797,6 +800,202 @@ const markAllAdminNotificationsRead = async (req, res) => {
   }
 };
 
+// ─── PREMIUM UPGRADE REQUESTS ────────────────────────────────────────────
+/**
+ * GET /api/admin/premium-requests
+ */
+const getPremiumUpgradeRequests = async (req, res) => {
+  try {
+    const page = Math.max(parseInt(req.query.page) || 1, 1);
+    const limit = Math.min(parseInt(req.query.limit) || 25, 100);
+    const skip = (page - 1) * limit;
+    const status = String(req.query.status || '').trim().toLowerCase();
+
+    const filter = {};
+    if (['pending', 'approved', 'rejected'].includes(status)) {
+      filter.status = status;
+    }
+
+    const [requests, total] = await Promise.all([
+      PremiumUpgradeRequest.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('userId', 'name email preferredPlan currentPlan premiumPlanStatus premiumPlanActive')
+        .populate('reviewedBy', 'name email')
+        .lean(),
+      PremiumUpgradeRequest.countDocuments(filter),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      requests,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    });
+  } catch {
+    return res.status(500).json({ success: false, message: 'Could not fetch premium requests.' });
+  }
+};
+
+/**
+ * PATCH /api/admin/premium-requests/:id/approve
+ */
+const approvePremiumUpgradeRequest = async (req, res) => {
+  try {
+    const premiumStreamCode = getPremiumStreamCode();
+    const requestDoc = await PremiumUpgradeRequest.findById(req.params.id);
+    if (!requestDoc) {
+      return res.status(404).json({ success: false, message: 'Premium request not found.' });
+    }
+
+    if (requestDoc.status !== 'pending') {
+      return res.status(400).json({ success: false, message: 'Only pending requests can be approved.' });
+    }
+
+    const user = await User.findById(requestDoc.userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User for this request no longer exists.' });
+    }
+
+    requestDoc.status = 'approved';
+    requestDoc.reviewedBy = req.user._id;
+    requestDoc.reviewedAt = new Date();
+    requestDoc.adminNote = String(req.body?.adminNote || '').trim() || null;
+    await requestDoc.save();
+
+    user.preferredPlan = 'premium';
+    user.currentPlan = 'premium';
+    user.premiumPlanStatus = 'active';
+    user.premiumPlanActive = true;
+    user.premiumPlanStartedAt = new Date();
+    user.premiumPlanExpiresAt = null;
+    await user.save({ validateBeforeSave: false });
+
+    await recordAuditLog({
+      req,
+      actor: req.user._id,
+      actorRole: req.user.role,
+      action: 'premium_upgrade_approved',
+      entityType: 'premium_upgrade_request',
+      entityId: requestDoc._id,
+      metadata: {
+        userId: user._id,
+        transferReference: requestDoc.transferReference,
+      },
+    });
+
+    const notification = await queueNotification({
+      userId: user._id,
+      channel: 'in_app',
+      type: 'premium_upgrade_approved',
+      title: 'Premium activated',
+      message: `Your premium payment was verified. Premium access is now active. Use code ${premiumStreamCode} for premium live streams.`,
+      payload: {
+        requestId: requestDoc._id,
+        premiumPlanStatus: 'active',
+        premiumStreamCode,
+      },
+    });
+
+    const io = req.app.get('io') || global.__io;
+    if (io) {
+      io.to(`user_${String(user._id)}`).emit('notification', {
+        _id: notification._id,
+        type: notification.type,
+        title: notification.title,
+        message: notification.message,
+        payload: notification.payload,
+        createdAt: notification.createdAt,
+      });
+    }
+
+    emitAdminOverviewRefresh(req, 'premium-upgrade-approved');
+
+    return res.status(200).json({ success: true, message: 'Premium access activated.', request: requestDoc });
+  } catch {
+    return res.status(500).json({ success: false, message: 'Could not approve premium request.' });
+  }
+};
+
+/**
+ * PATCH /api/admin/premium-requests/:id/reject
+ */
+const rejectPremiumUpgradeRequest = async (req, res) => {
+  try {
+    const requestDoc = await PremiumUpgradeRequest.findById(req.params.id);
+    if (!requestDoc) {
+      return res.status(404).json({ success: false, message: 'Premium request not found.' });
+    }
+
+    if (requestDoc.status !== 'pending') {
+      return res.status(400).json({ success: false, message: 'Only pending requests can be rejected.' });
+    }
+
+    const user = await User.findById(requestDoc.userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User for this request no longer exists.' });
+    }
+
+    const reason = String(req.body?.reason || req.body?.adminNote || '').trim() || 'Payment details could not be verified.';
+
+    requestDoc.status = 'rejected';
+    requestDoc.reviewedBy = req.user._id;
+    requestDoc.reviewedAt = new Date();
+    requestDoc.adminNote = reason;
+    await requestDoc.save();
+
+    user.currentPlan = 'free';
+    user.premiumPlanStatus = 'none';
+    user.premiumPlanActive = false;
+    user.premiumPlanStartedAt = null;
+    user.premiumPlanExpiresAt = null;
+    await user.save({ validateBeforeSave: false });
+
+    await recordAuditLog({
+      req,
+      actor: req.user._id,
+      actorRole: req.user.role,
+      action: 'premium_upgrade_rejected',
+      entityType: 'premium_upgrade_request',
+      entityId: requestDoc._id,
+      metadata: {
+        userId: user._id,
+        reason,
+      },
+    });
+
+    const notification = await queueNotification({
+      userId: user._id,
+      channel: 'in_app',
+      type: 'premium_upgrade_rejected',
+      title: 'Premium request rejected',
+      message: `Your premium payment request was rejected: ${reason}`,
+      payload: {
+        requestId: requestDoc._id,
+        reason,
+      },
+    });
+
+    const io = req.app.get('io') || global.__io;
+    if (io) {
+      io.to(`user_${String(user._id)}`).emit('notification', {
+        _id: notification._id,
+        type: notification.type,
+        title: notification.title,
+        message: notification.message,
+        payload: notification.payload,
+        createdAt: notification.createdAt,
+      });
+    }
+
+    emitAdminOverviewRefresh(req, 'premium-upgrade-rejected');
+
+    return res.status(200).json({ success: true, message: 'Premium request rejected.', request: requestDoc });
+  } catch {
+    return res.status(500).json({ success: false, message: 'Could not reject premium request.' });
+  }
+};
+
 module.exports = {
   getStats,
   getAllReports,
@@ -812,4 +1011,7 @@ module.exports = {
   getAdminNotifications,
   markAdminNotificationRead,
   markAllAdminNotificationsRead,
+  getPremiumUpgradeRequests,
+  approvePremiumUpgradeRequest,
+  rejectPremiumUpgradeRequest,
 };

@@ -141,6 +141,17 @@ export default function CitizenDashboard() {
   const [avatarErrored, setAvatarErrored] = useState(false)
   const [experienceDrafts, setExperienceDrafts] = useState({})
   const [additionalEvidenceDrafts, setAdditionalEvidenceDrafts] = useState({})
+  const [premiumConfig, setPremiumConfig] = useState(null)
+  const [premiumRequest, setPremiumRequest] = useState(null)
+  const [premiumRequestForm, setPremiumRequestForm] = useState({
+    transferReference: '',
+    transferAmount: '',
+    transferDate: '',
+    senderName: '',
+    note: '',
+    paymentReceipt: null,
+  })
+  const [premiumSubmitting, setPremiumSubmitting] = useState(false)
   const syncInProgressRef = useRef(false)
 
   const completedStatuses = new Set(['solved', 'resolved', 'closed'])
@@ -170,6 +181,12 @@ export default function CitizenDashboard() {
     setMapSummary(summaryRes.data.summary || null)
   }
 
+  const loadPremiumUpgradeStatus = async () => {
+    const { data } = await authService.getPremiumRequestStatus()
+    setPremiumConfig(data?.config || null)
+    setPremiumRequest(data?.request || null)
+  }
+
   useEffect(() => {
     if (!user) return
     setForm((prev) => ({
@@ -189,6 +206,7 @@ export default function CitizenDashboard() {
           platformService.getMetadata(),
           platformService.getConfigHealth(),
           fetchReports(),
+          loadPremiumUpgradeStatus(),
         ])
         const metadata = metaRes.data.metadata
         setMeta(metadata)
@@ -305,6 +323,8 @@ export default function CitizenDashboard() {
   const isMinorAccount = typeof resolvedAge === 'number' ? resolvedAge < 18 : user?.isAdult === false
   const canStartLiveStream = user?.role === 'user' && !isMinorAccount
   const canAccessLiveVideo = !isMinorAccount
+  const hasPremiumAccess = user?.role === 'admin' || user?.premiumPlanActive === true || user?.premiumPlanStatus === 'active' || user?.currentPlan === 'premium'
+  const hasUploadedPremiumReceipt = Boolean(premiumRequest?.paymentReceiptUrl)
   const needsGovernmentIdForVerification = !isMinorAccount
   const hasGovernmentIdForVerification = Boolean(user?.hasGovernmentId)
   const hasSelfieForVerification = Boolean(user?.hasVerificationSelfie)
@@ -758,6 +778,46 @@ export default function CitizenDashboard() {
     }
   }
 
+  const submitPremiumUpgradeRequest = async (e) => {
+    e.preventDefault()
+
+    if (hasPremiumAccess) {
+      toast.success('Premium is already active on your account.')
+      return
+    }
+
+    if (!String(premiumRequestForm.transferReference || '').trim()) {
+      toast.error('Transfer reference is required.')
+      return
+    }
+
+    if (!premiumRequestForm.paymentReceipt) {
+      toast.error('Please upload your payment receipt before submitting.')
+      return
+    }
+
+    try {
+      setPremiumSubmitting(true)
+      await authService.requestPremiumUpgrade({
+        transferReference: premiumRequestForm.transferReference,
+        transferAmount: premiumRequestForm.transferAmount ? Number(premiumRequestForm.transferAmount) : undefined,
+        transferDate: premiumRequestForm.transferDate || undefined,
+        senderName: premiumRequestForm.senderName || undefined,
+        note: premiumRequestForm.note || undefined,
+        paymentReceipt: premiumRequestForm.paymentReceipt,
+      })
+
+      toast.success('Premium request submitted with receipt. Admin will verify your payment shortly.')
+      setPremiumRequestForm({ transferReference: '', transferAmount: '', transferDate: '', senderName: '', note: '', paymentReceipt: null })
+      await refreshUser()
+      await loadPremiumUpgradeStatus()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Unable to submit premium request')
+    } finally {
+      setPremiumSubmitting(false)
+    }
+  }
+
   const submitExperience = async (report) => {
     const draft = experienceDrafts[report._id] || { rating: '5', journey: '' }
     const rating = Number(draft.rating)
@@ -838,7 +898,7 @@ export default function CitizenDashboard() {
   }, [])
 
   return (
-    <main className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
+    <main className="min-h-screen max-w-7xl mx-auto p-4 sm:p-6 space-y-6 bg-gradient-to-br from-slate-50 via-indigo-50/40 to-sky-50/40 dark:from-slate-900 dark:via-indigo-950/10 dark:to-sky-950/10 rounded-2xl">
       <header className="card p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-indigo-600/15 via-violet-600/10 to-sky-600/10 border border-indigo-400/30">
         <div className="flex items-center gap-3">
           {canRenderProfilePhoto ? (
@@ -876,6 +936,127 @@ export default function CitizenDashboard() {
           </div>
         </section>
       )}
+
+      <section className="card p-4 space-y-3 border border-amber-300/70 dark:border-amber-700/70 bg-amber-50/60 dark:bg-amber-900/20">
+        <h3 className="font-semibold text-amber-800 dark:text-amber-300">Subscription Plan</h3>
+        <p className="text-sm text-slate-700 dark:text-slate-300">
+          Current plan: <span className="font-semibold capitalize">{user?.currentPlan || 'free'}</span>
+          {' · '}
+          Premium status: <span className="font-semibold capitalize">{user?.premiumPlanStatus || 'none'}</span>
+        </p>
+
+        {hasPremiumAccess ? (
+          <p className="text-sm text-emerald-700 dark:text-emerald-300 font-medium">
+            ✅ Premium access is active. You can join premium private live streams.
+          </p>
+        ) : (
+          <>
+            {premiumRequest && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${hasUploadedPremiumReceipt ? 'border-emerald-300 dark:border-emerald-700 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' : 'border-rose-300 dark:border-rose-700 bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300'}`}>
+                  {hasUploadedPremiumReceipt ? '✅ Receipt uploaded successfully' : '⚠️ Receipt not uploaded'}
+                </span>
+                {premiumRequest?.paymentReceiptUrl && (
+                  <a
+                    href={premiumRequest.paymentReceiptUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-indigo-700 dark:text-indigo-300 hover:underline"
+                  >
+                    View uploaded receipt
+                  </a>
+                )}
+              </div>
+            )}
+
+            <div className="rounded-lg border border-amber-400/60 dark:border-amber-700/60 bg-amber-100/70 dark:bg-amber-900/25 p-3 text-xs text-amber-900 dark:text-amber-200">
+              <p className="font-semibold mb-1">Manual Bank Transfer Required for Premium</p>
+              <p>
+                Account Name: <span className="font-semibold">{premiumConfig?.bankAccount?.accountName || 'VOV Crime Premium'}</span><br />
+                Account Number: <span className="font-semibold">{premiumConfig?.bankAccount?.accountNumber || '0000000000'}</span><br />
+                Bank: <span className="font-semibold">{premiumConfig?.bankAccount?.bankName || 'Your Bank Name'}</span><br />
+                Amount: <span className="font-semibold">₦{Number(premiumConfig?.amount || 5000).toLocaleString()}</span>
+              </p>
+            </div>
+
+            {premiumRequest?.status === 'pending' ? (
+              <p className="text-sm text-indigo-700 dark:text-indigo-300 font-medium">
+                ⏳ You already have a pending premium payment request under admin review.
+              </p>
+            ) : (
+              <form onSubmit={submitPremiumUpgradeRequest} className="grid md:grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Transfer Reference *</label>
+                  <input
+                    className="input"
+                    value={premiumRequestForm.transferReference}
+                    onChange={(e) => setPremiumRequestForm((p) => ({ ...p, transferReference: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="label">Amount Transferred (NGN)</label>
+                  <input
+                    className="input"
+                    type="number"
+                    min="0"
+                    value={premiumRequestForm.transferAmount}
+                    onChange={(e) => setPremiumRequestForm((p) => ({ ...p, transferAmount: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="label">Transfer Date</label>
+                  <input
+                    className="input"
+                    type="date"
+                    value={premiumRequestForm.transferDate}
+                    onChange={(e) => setPremiumRequestForm((p) => ({ ...p, transferDate: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="label">Sender Name</label>
+                  <input
+                    className="input"
+                    value={premiumRequestForm.senderName}
+                    onChange={(e) => setPremiumRequestForm((p) => ({ ...p, senderName: e.target.value }))}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="label">Note (optional)</label>
+                  <textarea
+                    className="textarea"
+                    rows={2}
+                    value={premiumRequestForm.note}
+                    onChange={(e) => setPremiumRequestForm((p) => ({ ...p, note: e.target.value }))}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="label">Payment Receipt Upload *</label>
+                  <input
+                    className="input"
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={(e) => setPremiumRequestForm((p) => ({ ...p, paymentReceipt: e.target.files?.[0] || null }))}
+                    required
+                  />
+                  <p className="text-xs text-slate-500 mt-1">Upload bank transfer receipt (JPG, PNG, WEBP, or PDF).</p>
+                </div>
+                <div className="md:col-span-2">
+                  <button type="submit" className="btn-primary" disabled={premiumSubmitting}>
+                    {premiumSubmitting ? 'Submitting…' : 'Submit Premium Payment for Admin Verification'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {premiumRequest?.status === 'rejected' && premiumRequest?.adminNote && (
+              <p className="text-sm text-rose-700 dark:text-rose-300">
+                Last rejection reason: {premiumRequest.adminNote}
+              </p>
+            )}
+          </>
+        )}
+      </section>
 
       {user?.idVerificationStatus !== 'verified' && (
         <section className="card p-4 space-y-3 border border-amber-300/70 dark:border-amber-700/60 bg-amber-50/60 dark:bg-amber-900/20">
@@ -978,22 +1159,29 @@ export default function CitizenDashboard() {
         <div className="card p-6 text-sm text-slate-500">Loading dashboard…</div>
       ) : (
         <>
-          <section className="grid sm:grid-cols-3 gap-4">
-            <div className="card p-4 border-l-4 border-indigo-500 bg-gradient-to-br from-indigo-500/10 to-transparent">
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Dashboard Overview</h2>
+              <span className="text-xs text-indigo-600 dark:text-indigo-300 font-semibold">Live activity snapshot</span>
+            </div>
+
+            <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="card p-4 border-l-4 border-indigo-500 bg-gradient-to-br from-indigo-500/10 to-transparent shadow-sm hover:shadow-md transition-shadow">
               <p className="text-sm text-slate-500">Total Reports</p>
               <p className="text-2xl font-bold text-slate-900 dark:text-white">{reports.length}</p>
             </div>
-            <div className="card p-4 border-l-4 border-amber-500 bg-gradient-to-br from-amber-500/10 to-transparent">
+            <div className="card p-4 border-l-4 border-amber-500 bg-gradient-to-br from-amber-500/10 to-transparent shadow-sm hover:shadow-md transition-shadow">
               <p className="text-sm text-slate-500">Pending</p>
               <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{statusCount.pending}</p>
             </div>
-            <div className="card p-4 border-l-4 border-emerald-500 bg-gradient-to-br from-emerald-500/10 to-transparent">
+            <div className="card p-4 border-l-4 border-emerald-500 bg-gradient-to-br from-emerald-500/10 to-transparent shadow-sm hover:shadow-md transition-shadow">
               <p className="text-sm text-slate-500">In Progress</p>
               <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{statusCount.in_progress}</p>
             </div>
-            <div className="card p-4 border-l-4 border-emerald-500 bg-gradient-to-br from-emerald-500/10 to-transparent">
+            <div className="card p-4 border-l-4 border-emerald-500 bg-gradient-to-br from-emerald-500/10 to-transparent shadow-sm hover:shadow-md transition-shadow">
               <p className="text-sm text-slate-500">Solved</p>
               <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{statusCount.solved}</p>
+            </div>
             </div>
           </section>
 

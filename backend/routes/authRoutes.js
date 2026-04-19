@@ -2,6 +2,7 @@ const express  = require('express');
 const { body } = require('express-validator');
 const {
   register, login, logout, getMe, updateProfile, changePassword, forgotPassword, resetPassword, uploadGovernmentId, uploadVerificationSelfie, uploadProfilePhoto,
+  getPremiumPlanConfig, requestPremiumUpgrade, getMyPremiumUpgradeRequest,
 } = require('../controllers/authController');
 const { protect }                         = require('../middleware/auth');
 const { authLimiter, uploadLimiter }      = require('../middleware/rateLimiter');
@@ -10,6 +11,7 @@ const {
   uploadGovernmentId: uploadIdMiddleware,
   uploadSelfie: uploadSelfieMiddleware,
   uploadProfilePhoto: uploadProfilePhotoMiddleware,
+  uploadPremiumReceipt: uploadPremiumReceiptMiddleware,
   handleUpload,
   ensureCloudinaryUploadConfigured,
   ensureGovernmentIdUploadConfigured,
@@ -18,6 +20,7 @@ const {
   registerValidation,
   loginValidation,
   changePasswordValidation,
+  premiumUpgradeRequestValidation,
 } = require('../utils/validators');
 const { NIGERIA_STATES } = require('../utils/nigeria');
 
@@ -29,6 +32,7 @@ router.post('/login',    authLimiter, loginValidation,    validate, login);
 router.post('/forgot-password', authLimiter, forgotPassword);
 router.post('/reset-password', authLimiter, resetPassword);
 router.post('/logout',   protect, logout);
+router.get('/premium-config', getPremiumPlanConfig);
 
 // Protected routes
 router.use(protect);
@@ -39,6 +43,15 @@ router.put('/update-profile', [
   body('state').optional().isIn(NIGERIA_STATES),
 ], validate, updateProfile);
 router.put('/change-password', changePasswordValidation, validate, changePassword);
+router.get('/premium/request-status', getMyPremiumUpgradeRequest);
+router.post(
+  '/premium/upgrade-request',
+  ensureCloudinaryUploadConfigured,
+  handleUpload(uploadPremiumReceiptMiddleware),
+  premiumUpgradeRequestValidation,
+  validate,
+  requestPremiumUpgrade
+);
 
 // Government ID upload — rate-limited and authenticated
 router.post(

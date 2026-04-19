@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const PremiumUpgradeRequest = require('../models/PremiumUpgradeRequest');
 const mongoose = require('mongoose');
 const crypto = require('crypto');
 const { encrypt, decrypt } = require('../utils/encryption');
@@ -11,6 +12,23 @@ const {
   sanitizeUserForResponse,
 } = require('../services/authService');
 const { queueNotification } = require('../services/notificationService');
+
+const getPremiumPlanConfigPayload = () => {
+  const planAmountRaw = Number(process.env.PREMIUM_PLAN_PRICE_NGN || 5000);
+  const amount = Number.isFinite(planAmountRaw) && planAmountRaw > 0 ? planAmountRaw : 5000;
+
+  return {
+    planName: 'Premium',
+    currency: 'NGN',
+    amount,
+    streamAccessCodeHint: 'Use approved premium access code after admin verification.',
+    bankAccount: {
+      accountName: String(process.env.PREMIUM_BANK_ACCOUNT_NAME || 'VOV Crime Premium').trim(),
+      accountNumber: String(process.env.PREMIUM_BANK_ACCOUNT_NUMBER || '0000000000').trim(),
+      bankName: String(process.env.PREMIUM_BANK_NAME || 'Your Bank Name').trim(),
+    },
+  };
+};
 
 const buildResetPasswordUrl = (resetToken) => {
   const explicitResetBase = String(process.env.RESET_PASSWORD_URL || '').trim();
@@ -231,6 +249,21 @@ const applyProviderVerificationIfReady = async ({ req, user, idCardNumber, gover
   return { user: updatedUser, providerResult };
 };
 
+const buildPremiumRequestPayload = ({ reqBody = {}, userId, submittedVia = 'existing_user', file = null }) => ({
+  userId,
+  planType: 'premium',
+  status: 'pending',
+  transferReference: String(reqBody.transferReference || reqBody.premiumTransferReference || '').trim(),
+  transferAmount: reqBody.transferAmount || reqBody.premiumTransferAmount ? Number(reqBody.transferAmount || reqBody.premiumTransferAmount) : null,
+  transferDate: reqBody.transferDate || reqBody.premiumTransferDate ? new Date(reqBody.transferDate || reqBody.premiumTransferDate) : null,
+  senderName: String(reqBody.senderName || reqBody.premiumTransferSenderName || '').trim() || null,
+  note: String(reqBody.note || reqBody.premiumTransferNote || '').trim() || null,
+  paymentReceiptUrl: file?.path || null,
+  paymentReceiptPublicId: file?.filename || null,
+  paymentReceiptMimeType: file?.mimetype || null,
+  submittedVia,
+});
+
 // ─── Helper: send token in response ──────────────────────────────────────
 const sendTokenResponse = (user, statusCode, res) => {
   const token = signToken(user._id);
@@ -268,7 +301,15 @@ const register = async (req, res) => {
       dateOfBirth,
       adultConsentAccepted,
       minorConsentAccepted,
+      selectedPlan,
+      premiumTransferReference,
+      premiumTransferAmount,
+      premiumTransferDate,
+      premiumTransferSenderName,
+      premiumTransferNote,
     } = req.body;
+
+    const normalizedSelectedPlan = String(selectedPlan || 'free').trim().toLowerCase() === 'premium' ? 'premium' : 'free';
 
     const age = getAgeFromDate(dateOfBirth);
     if (age === null) {
@@ -310,6 +351,10 @@ const register = async (req, res) => {
       adultConsentAccepted: isAdult ? true : false,
       minorConsentAccepted: !isAdult ? true : false,
       idCardType: isAdult ? idCardType : null,
+      preferredPlan: normalizedSelectedPlan,
+      currentPlan: 'free',
+      premiumPlanStatus: 'none',
+      premiumPlanActive: false,
     });
 
     await recordAuditLog({
@@ -325,6 +370,7 @@ const register = async (req, res) => {
         isAdult: user.isAdult,
         adultConsentAccepted: user.adultConsentAccepted,
         minorConsentAccepted: user.minorConsentAccepted,
+        preferredPlan: user.preferredPlan,
       },
     });
 
@@ -445,6 +491,102 @@ const getMe = async (req, res) => {
     res.status(200).json({ success: true, user });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error.' });
+  }
+};
+
+const getPremiumPlanConfig = async (req, res) => {
+  return res.status(200).json({ success: true, config: getPremiumPlanConfigPayload() });
+};
+
+const requestPremiumUpgrade = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    if (user.currentPlan === 'premium' || user.premiumPlanActive === true || user.premiumPlanStatus === 'active') {
+      return res.status(400).json({ success: false, message: 'Premium is already active on this account.' });
+    }
+
+    const transferReference = String(req.body?.transferReference || '').trim();
+    if (!transferReference) {
+      return res.status(400).json({ success: false, message: 'Transfer reference is required.' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'Payment receipt upload is required.' });
+    }
+
+    const existingPending = await PremiumUpgradeRequest.findOne({
+      userId: user._id,
+      status: 'pending',
+    });
+
+    if (existingPending) {
+      return res.status(409).json({
+        success: false,
+        message: 'A premium payment request is already pending admin review.',
+      });
+    }
+
+    const requestDoc = await PremiumUpgradeRequest.create(
+      buildPremiumRequestPayload({ reqBody: req.body, userId: user._id, submittedVia: 'existing_user', file: req.file })
+    );
+
+    user.preferredPlan = 'premium';
+    await user.save({ validateBeforeSave: false });
+
+    await recordAuditLog({
+      req,
+      actor: req.user._id,
+      actorRole: req.user.role,
+      action: 'premium_upgrade_requested',
+      entityType: 'premium_upgrade_request',
+      entityId: requestDoc._id,
+      metadata: {
+        transferReference: requestDoc.transferReference,
+        transferAmount: requestDoc.transferAmount,
+        submittedVia: requestDoc.submittedVia,
+      },
+    });
+
+    emitAdminOverviewRefresh(req, 'premium-upgrade-requested');
+
+    await notifyAdmins({
+      req,
+      type: 'premium_upgrade_requested',
+      title: 'Premium activation request',
+      message: `${user.name || 'A user'} submitted premium transfer details for review.`,
+      payload: {
+        requestId: requestDoc._id,
+        userId: user._id,
+        name: user.name,
+        email: user.email,
+        transferReference: requestDoc.transferReference,
+      },
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Premium request submitted with receipt. Admin will verify your transfer and activate premium access.',
+      request: requestDoc,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Could not submit premium request.' });
+  }
+};
+
+const getMyPremiumUpgradeRequest = async (req, res) => {
+  try {
+    const [request, config] = await Promise.all([
+      PremiumUpgradeRequest.findOne({ userId: req.user._id }).sort({ createdAt: -1 }).lean(),
+      Promise.resolve(getPremiumPlanConfigPayload()),
+    ]);
+
+    return res.status(200).json({ success: true, request, config });
+  } catch {
+    return res.status(500).json({ success: false, message: 'Could not fetch premium request status.' });
   }
 };
 
@@ -877,4 +1019,7 @@ module.exports = {
   uploadGovernmentId,
   uploadVerificationSelfie,
   uploadProfilePhoto,
+  getPremiumPlanConfig,
+  requestPremiumUpgrade,
+  getMyPremiumUpgradeRequest,
 };

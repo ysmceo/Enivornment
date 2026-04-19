@@ -14,6 +14,9 @@ const {
   getAdminNotifications,
   markAdminNotificationRead,
   markAllAdminNotificationsRead,
+  getPremiumUpgradeRequests,
+  approvePremiumUpgradeRequest,
+  rejectPremiumUpgradeRequest,
 } = require('../controllers/adminController');
 const { protect, requireAdmin } = require('../middleware/auth');
 const { adminLimiter }          = require('../middleware/rateLimiter');
@@ -22,6 +25,7 @@ const {
   statusUpdateValidation,
   verifyGovernmentIdValidation,
   mongoIdParamValidation,
+  premiumUpgradeReviewValidation,
 } = require('../utils/validators');
 
 const router = express.Router();
@@ -35,6 +39,9 @@ router.get('/audit-logs', getAuditLogs);
 router.get('/notifications', getAdminNotifications);
 router.patch('/notifications/read-all', markAllAdminNotificationsRead);
 router.patch('/notifications/:id/read', mongoIdParamValidation('id'), validate, markAdminNotificationRead);
+router.get('/premium-requests', getPremiumUpgradeRequests);
+router.patch('/premium-requests/:id/approve', mongoIdParamValidation('id'), premiumUpgradeReviewValidation, validate, approvePremiumUpgradeRequest);
+router.patch('/premium-requests/:id/reject', mongoIdParamValidation('id'), premiumUpgradeReviewValidation, validate, rejectPremiumUpgradeRequest);
 
 // ─── Reports management ────────────────────────────────────────────────────
 router.get('/reports',           getAllReports);

@@ -28,9 +28,13 @@ router.get('/admin/export-csv', protect, requireAdmin, adminExportEmergencyConta
 router.post('/admin/import-csv', protect, requireAdmin, adminImportEmergencyContactsCsv);
 
 const contactValidation = [
+  body('scope').optional({ nullable: true, checkFalsy: true }).isIn(['state', 'national']),
   body('name').trim().notEmpty().isLength({ max: 150 }),
   body('agency').trim().notEmpty().isLength({ max: 150 }),
-  body('state').trim().notEmpty(),
+  body('state').custom((value, { req }) => {
+    if (String(req.body?.scope || 'state').toLowerCase() === 'national') return true;
+    return Boolean(String(value || '').trim());
+  }).withMessage('State is required for state-scoped contacts'),
   body('region').optional({ nullable: true, checkFalsy: true }).isString(),
   body('authorityType').optional({ nullable: true, checkFalsy: true }).isIn(['police', 'civil_defence', 'military', 'other']),
   body('category').optional().isString(),
