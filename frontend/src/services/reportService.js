@@ -19,8 +19,28 @@ export const reportService = {
   /** Single report detail */
   getReportById: (id) => api.get(`/reports/${id}`),
 
+  /** Track report by generated case ID */
+  trackCaseById: (caseId) => api.get(`/reports/track/${encodeURIComponent(caseId)}`),
+
+  /** Track report by case ID + reporter email */
+  trackCaseWithEmail: ({ caseId, email }) => api.post('/reports/track', { caseId, email }),
+
   /** Update a pending report */
   updateReport: (id, data) => api.put(`/reports/${id}`, data),
+
+  /** Submit user experience after case completion */
+  submitExperience: (id, data) => api.patch(`/reports/${id}/experience`, data),
+
+  /** User uploads additional evidence for an existing case */
+  submitAdditionalEvidence: (id, { files = [], note = '' }) => {
+    const form = new FormData();
+    files.forEach((file) => form.append('media', file));
+    if (note) form.append('note', note);
+
+    return api.patch(`/reports/${id}/add-evidence`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 
   /** Delete a pending report */
   deleteReport: (id) => api.delete(`/reports/${id}`),
@@ -28,6 +48,7 @@ export const reportService = {
   // ─── Admin ───────────────────────────────────────────────────────────────
   adminGetAllReports: (params) => api.get('/admin/reports', { params }),
   adminUpdateStatus:  (id, data) => api.patch(`/admin/reports/${id}/status`, data),
+  adminRequestEvidence: (id, data) => api.patch(`/reports/${id}/request-evidence`, data),
   adminDeleteReport:  (id) => api.delete(`/admin/reports/${id}`),
   getAdminStats:      () => api.get('/admin/stats'),
 };

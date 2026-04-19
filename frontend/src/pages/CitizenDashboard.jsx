@@ -124,6 +124,7 @@ export default function CitizenDashboard() {
   const [lastSubmittedCaseId, setLastSubmittedCaseId] = useState('')
   const [copiedCaseCode, setCopiedCaseCode] = useState(false)
   const [experienceDrafts, setExperienceDrafts] = useState({})
+  const [additionalEvidenceDrafts, setAdditionalEvidenceDrafts] = useState({})
   const syncInProgressRef = useRef(false)
 
   const completedStatuses = new Set(['solved', 'resolved', 'closed'])
@@ -694,6 +695,44 @@ export default function CitizenDashboard() {
         [field]: value,
       },
     }))
+  }
+
+  const setAdditionalEvidenceField = (reportId, field, value) => {
+    setAdditionalEvidenceDrafts((prev) => ({
+      ...prev,
+      [reportId]: {
+        files: prev[reportId]?.files || [],
+        note: prev[reportId]?.note || '',
+        uploading: false,
+        ...prev[reportId],
+        [field]: value,
+      },
+    }))
+  }
+
+  const submitAdditionalEvidence = async (report) => {
+    const draft = additionalEvidenceDrafts[report._id] || { files: [], note: '' }
+    const filesToUpload = draft.files || []
+    const note = String(draft.note || '').trim()
+
+    if (!filesToUpload.length) {
+      toast.error('Please choose at least one file to upload')
+      return
+    }
+
+    try {
+      setAdditionalEvidenceField(report._id, 'uploading', true)
+      await reportService.submitAdditionalEvidence(report._id, { files: filesToUpload, note })
+      toast.success('Additional evidence uploaded successfully')
+      await fetchReports()
+      setAdditionalEvidenceDrafts((prev) => ({
+        ...prev,
+        [report._id]: { files: [], note: '', uploading: false },
+      }))
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to upload additional evidence')
+      setAdditionalEvidenceField(report._id, 'uploading', false)
+    }
   }
 
   const submitExperience = async (report) => {
@@ -1383,6 +1422,46 @@ export default function CitizenDashboard() {
                     {report.moderation?.flagged && (
                       <p className="text-xs text-amber-600 mt-1">Moderation review in progress</p>
                     )}
+
+                    <div className="mt-3 rounded-lg border border-sky-200 dark:border-sky-800 p-3 bg-sky-50/60 dark:bg-sky-900/20 space-y-2">
+                      <p className="text-xs font-semibold text-sky-700 dark:text-sky-300">
+                        Additional Evidence Upload
+                      </p>
+
+                      {Array.isArray(report.evidenceRequests) && report.evidenceRequests.some((req) => req.status === 'open') && (
+                        <div className="rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-2 text-xs text-amber-800 dark:text-amber-300">
+                          Admin request: {report.evidenceRequests.filter((req) => req.status === 'open').slice(-1)[0]?.note || 'Additional evidence requested.'}
+                        </div>
+                      )}
+
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/*,video/*"
+                        className="input"
+                        onChange={(e) => setAdditionalEvidenceField(report._id, 'files', Array.from(e.target.files || []))}
+                      />
+                      <p className="text-xs text-slate-500">
+                        {(additionalEvidenceDrafts[report._id]?.files || []).length} file(s) selected
+                      </p>
+
+                      <textarea
+                        className="textarea"
+                        rows={2}
+                        placeholder="Optional note to admin about this evidence"
+                        value={additionalEvidenceDrafts[report._id]?.note || ''}
+                        onChange={(e) => setAdditionalEvidenceField(report._id, 'note', e.target.value)}
+                      />
+
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() => submitAdditionalEvidence(report)}
+                        disabled={Boolean(additionalEvidenceDrafts[report._id]?.uploading)}
+                      >
+                        {additionalEvidenceDrafts[report._id]?.uploading ? 'Uploading…' : 'Upload Additional Evidence'}
+                      </button>
+                    </div>
                   </div>
                 ))
               )}

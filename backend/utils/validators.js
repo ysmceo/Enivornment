@@ -226,6 +226,20 @@ const reportExperienceValidation = [
     .isLength({ min: 10, max: 3000 }).withMessage('Journey feedback must be between 10 and 3000 characters'),
 ];
 
+const requestMoreEvidenceValidation = [
+  body('note')
+    .trim()
+    .notEmpty().withMessage('Evidence request note is required')
+    .isLength({ min: 5, max: 1000 }).withMessage('Evidence request note must be between 5 and 1000 characters'),
+];
+
+const submitAdditionalEvidenceValidation = [
+  body('note')
+    .optional({ nullable: true })
+    .trim()
+    .isLength({ max: 1000 }).withMessage('Additional evidence note cannot exceed 1000 characters'),
+];
+
 const verifyGovernmentIdValidation = [
   param('id').isMongoId().withMessage('Invalid user ID'),
   body('action')
@@ -278,5 +292,7 @@ module.exports = {
   caseIdParamValidation,
   trackCaseByEmailValidation,
   reportExperienceValidation,
+  requestMoreEvidenceValidation,
+  submitAdditionalEvidenceValidation,
   emergencyContactValidation,
 };
