@@ -77,6 +77,17 @@ const streamSchema = new mongoose.Schema(
       default: 0,
     },
 
+    likesCount: {
+      type: Number,
+      default: 0,
+    },
+
+    reactionCounts: {
+      type: Map,
+      of: Number,
+      default: {},
+    },
+
     startedAt: {
       type: Date,
       default: Date.now,
@@ -109,5 +120,6 @@ const streamSchema = new mongoose.Schema(
 streamSchema.index({ streamer: 1 });
 streamSchema.index({ userId: 1 });
 streamSchema.index({ status: 1 });
+streamSchema.index({ likesCount: -1 });
 
 module.exports = mongoose.model('Stream', streamSchema);

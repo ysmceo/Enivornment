@@ -13,14 +13,45 @@ export default function AdminVerification() {
   const [identityAssets, setIdentityAssets] = useState(null)
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [avatarErrors, setAvatarErrors] = useState({})
+
+  const markAvatarError = (userId) => {
+    setAvatarErrors((prev) => ({ ...prev, [userId]: true }))
+  }
+
+  const getInitials = (name = '') => {
+    const tokens = String(name || '').trim().split(/\s+/).filter(Boolean)
+    if (!tokens.length) return 'U'
+    return tokens.slice(0, 2).map((token) => token[0]?.toUpperCase() || '').join('')
+  }
 
   const loadPending = async () => {
-    const { data } = await userService.getAllUsers({ verificationStatus: 'pending', limit: 100 })
-    setUsers(data.users || [])
+    setLoading(true)
+    setError('')
+    try {
+      const { data } = await userService.getAllUsers({ verificationStatus: 'pending', limit: 100 })
+      setUsers(data.users || [])
+    } catch (err) {
+      const primaryMessage = err.response?.data?.message
+
+      // Fallback: load user list without strict filter, then narrow in UI.
+      try {
+        const { data } = await userService.getAllUsers({ limit: 100 })
+        const pendingUsers = (data.users || []).filter((u) => u.idVerificationStatus === 'pending')
+        setUsers(pendingUsers)
+        setNotice('Loaded queue in compatibility mode. Some server filters are unavailable.')
+      } catch {
+        setUsers([])
+        setError(primaryMessage || 'Failed to load verification queue')
+      }
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
-    loadPending().catch(() => setError('Failed to load verification queue'))
+    loadPending()
   }, [])
 
   const openReview = async (u) => {
@@ -75,9 +106,34 @@ export default function AdminVerification() {
                   </tr>
                 </thead>
                 <tbody>
+                  {!loading && users.length === 0 && (
+                    <tr>
+                      <td className="table-td text-slate-500" colSpan={4}>
+                        No pending users in verification queue.
+                        <button className="ml-3 text-indigo-600 font-semibold" onClick={loadPending}>Retry</button>
+                      </td>
+                    </tr>
+                  )}
+
                   {users.map((u) => (
                     <tr key={u._id}>
-                      <td className="table-td">{u.name}</td>
+                      <td className="table-td">
+                        <div className="flex items-center gap-2.5">
+                          {u.profilePhoto && !avatarErrors[u._id] ? (
+                            <img
+                              src={u.profilePhoto}
+                              alt={`${u.name || 'User'} profile`}
+                              className="w-8 h-8 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+                              onError={() => markAvatarError(u._id)}
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 text-xs font-semibold flex items-center justify-center">
+                              {getInitials(u.name)}
+                            </div>
+                          )}
+                          <span className="font-medium">{u.name}</span>
+                        </div>
+                      </td>
                       <td className="table-td">{u.email}</td>
                       <td className="table-td"><Badge status={u.idVerificationStatus || 'none'} /></td>
                       <td className="table-td">
@@ -107,7 +163,31 @@ export default function AdminVerification() {
       >
         {selected && (
           <div className="space-y-3">
+            <div className="flex items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+              {selected.profilePhoto && !avatarErrors[selected._id] ? (
+                <img
+                  src={selected.profilePhoto}
+                  alt={`${selected.name || 'User'} profile`}
+                  className="w-12 h-12 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+                  onError={() => markAvatarError(selected._id)}
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-indigo-100 dark:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 text-sm font-semibold flex items-center justify-center">
+                  {getInitials(selected.name)}
+                </div>
+              )}
+              <div>
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{selected.name}</p>
+                <p className="text-xs text-slate-500">{selected.email}</p>
+              </div>
+            </div>
+
             <p className="text-sm text-slate-500">Review uploaded government ID and selfie, then choose an action.</p>
+
+            <div className="flex items-center gap-2">
+              <button className="btn-danger text-sm" onClick={() => decide('reject')}>Reject</button>
+              <button className="btn-success text-sm" onClick={() => decide('approve')}>Approve</button>
+            </div>
 
             <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 text-sm space-y-1">
               <p><span className="font-semibold">ID type:</span> {identityAssets?.idCardType || 'Not provided'}</p>

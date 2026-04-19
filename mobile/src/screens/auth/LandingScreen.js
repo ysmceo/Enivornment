@@ -5,7 +5,7 @@ import ScreenContainer from '../../components/ScreenContainer';
 export default function LandingScreen({ navigation }) {
   return (
     <ScreenContainer
-      title="Crime Reporting"
+      title="VOV CRIME"
       subtitle="Secure citizen reporting, emergency support, live monitoring, and admin operations on mobile."
     >
       <View style={styles.card}>

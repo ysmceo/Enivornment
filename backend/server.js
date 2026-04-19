@@ -11,6 +11,7 @@ const compression     = require('compression');
 const morgan          = require('morgan');
 const cookieParser    = require('cookie-parser');
 const mongoose        = require('mongoose');
+const streamingConfig = require('./config/streaming');
 
 const connectDB       = require('./config/db');
 const { generalLimiter } = require('./middleware/rateLimiter');
@@ -91,6 +92,12 @@ app.get('/api/health', (req, res) =>
     env: process.env.NODE_ENV,
     mode: mongoose.connection.readyState === 1 ? 'full' : 'degraded',
     dbConnected: mongoose.connection.readyState === 1,
+    streaming: {
+      mode: streamingConfig.STREAMING_MODE,
+      adaptiveQuality: streamingConfig.ADAPTIVE.enabled,
+      sfuConfigured: Boolean(streamingConfig.SFU.url),
+      hlsConfigured: Boolean(streamingConfig.HLS.ingestUrl && streamingConfig.HLS.playbackBaseUrl),
+    },
   })
 );
 

@@ -38,7 +38,7 @@ export default function AdminSidebar() {
         </div>
         {!collapsed && (
           <span className="text-sm font-bold text-slate-900 dark:text-white whitespace-nowrap">
-            TRUE <span className="text-indigo-600">HERO</span> CRIME REPORT
+            VOV <span className="text-indigo-600">CRIME</span>
           </span>
         )}
       </div>

@@ -139,7 +139,7 @@ export default function EmergencyDirectoryPageV2() {
     <main className="max-w-5xl mx-auto p-4 sm:p-6 space-y-5">
       <section className="card p-5">
         <h1 className="text-2xl font-bold">{t('quickDialDirectory', 'Verified Emergency Directory')}</h1>
-        <p className="text-sm text-slate-500 mt-1">{t('quickDialDescription', 'Official state-level emergency contacts managed by authorized civic admins.')}</p>
+        <p className="text-sm text-slate-500 mt-1">{t('quickDialDescription', 'Official state-level emergency contacts managed by authorized civic administrators.')}</p>
       </section>
 
       <section className="card p-5 space-y-4">
@@ -189,7 +189,7 @@ export default function EmergencyDirectoryPageV2() {
 
         <p className="text-xs text-slate-500">
           {isAdmin
-            ? t('quickDialHint', 'Auto-suggest is enabled. Tap any number for one-click calling.')
+            ? t('quickDialHint', 'Auto-suggest is enabled. Select any number for one-click calling.')
             : 'Authority phone numbers are restricted to admin accounts.'}
         </p>
         {detectedState && <p className="text-xs text-slate-500">{t('nearbyFirst', 'Nearby authorities are prioritized first')}</p>}

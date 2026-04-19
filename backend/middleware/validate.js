@@ -11,7 +11,11 @@ const validate = (req, res, next) => {
   if (errors.isEmpty()) return next();
 
   const formatted = errors.array().map(({ path, msg }) => ({ field: path, message: msg }));
-  return res.status(422).json({ success: false, message: 'Validation failed', errors: formatted });
+  return res.status(422).json({
+    success: false,
+    message: formatted[0]?.message || 'Validation failed',
+    errors: formatted,
+  });
 };
 
 module.exports = validate;

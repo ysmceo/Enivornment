@@ -25,6 +25,7 @@ const ForgotPassword = lazyWithReload(() => import('./pages/ForgotPassword'))
 const ResetPassword = lazyWithReload(() => import('./pages/ResetPassword'))
 const Preview = lazyWithReload(() => import('./pages/Preview'))
 const CitizenDashboard = lazyWithReload(() => import('./pages/CitizenDashboard'))
+const CaseTrackingPage = lazyWithReload(() => import('./pages/CaseTrackingPage'))
 const AdminDashboard = lazyWithReload(() => import('./pages/AdminDashboard'))
 const AdminReports = lazyWithReload(() => import('./pages/AdminReports'))
 const AdminUsers = lazyWithReload(() => import('./pages/AdminUsers'))
@@ -71,6 +72,15 @@ export default function App() {
               element={
                 <ProtectedRoute role={["user", "authority"]}>
                   <CitizenDashboard />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/cases/track"
+              element={
+                <ProtectedRoute role={["user", "authority"]}>
+                  <CaseTrackingPage />
                 </ProtectedRoute>
               }
             />
@@ -146,7 +156,7 @@ export default function App() {
             <Route
               path="/live/start"
               element={
-                <ProtectedRoute role="user">
+                <ProtectedRoute role={["user", "admin"]}>
                   <LiveStartPage />
                 </ProtectedRoute>
               }

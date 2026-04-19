@@ -8,9 +8,36 @@ const { buildNewStreamPayload } = require('../services/streamService');
  */
 const startStream = async (req, res) => {
   try {
+    const isUser = req.user?.role === 'user';
+    const isAdmin = req.user?.role === 'admin';
+
+    if (!isUser && !isAdmin) {
+      return res.status(403).json({ success: false, message: 'Only verified users or admins can start a stream.' });
+    }
+
+    if (isUser && req.user?.idVerificationStatus !== 'verified') {
+      return res.status(403).json({ success: false, message: 'Identity verification is required before streaming.' });
+    }
+
     const { payload } = buildNewStreamPayload({ body: req.body, userId: req.user._id });
 
     const stream = await Stream.create(payload);
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('stream:started', {
+        streamId: stream.streamId,
+        roomId: stream.roomId,
+        title: stream.title,
+        startedAt: stream.startedAt,
+        startedBy: {
+          id: req.user._id,
+          name: req.user.name || 'A user',
+          role: req.user.role,
+        },
+        joinPath: `/live/${stream.streamId}`,
+      });
+    }
 
     res.status(201).json({ success: true, stream });
   } catch (err) {
@@ -36,6 +63,16 @@ const endStream = async (req, res) => {
     stream.endedAt  = endedAt;
     stream.duration = duration;
     await stream.save();
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('stream:ended', {
+        streamId: stream.streamId,
+        roomId: stream.roomId,
+        title: stream.title,
+        endedAt: stream.endedAt,
+      });
+    }
 
     res.status(200).json({ success: true, message: 'Stream ended.', stream });
   } catch (err) {

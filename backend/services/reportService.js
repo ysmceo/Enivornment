@@ -3,6 +3,11 @@ const parseCoordinate = (value, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const normalizeText = (value) => {
+  const normalized = String(value ?? '').trim();
+  return normalized || null;
+};
+
 const mapUploadedMedia = (files = []) =>
   files.map((file) => ({
     url: file.path,
@@ -30,6 +35,11 @@ const normalizeReportPayload = (body = {}) => {
     severity: body.severity || 'medium',
     state: body.state,
     isAnonymous: body.isAnonymous === 'true' || body.isAnonymous === true,
+    reporterContact: {
+      fullName: normalizeText(body['reporter.fullName'] || body?.reporter?.fullName || body.fullName),
+      phone: normalizeText(body['reporter.phone'] || body?.reporter?.phone || body.phone),
+      email: normalizeText(body['reporter.email'] || body?.reporter?.email || body.email),
+    },
     location: {
       address,
       coordinates: { type: 'Point', coordinates: [longitude, latitude] },

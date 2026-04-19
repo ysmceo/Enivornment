@@ -23,6 +23,7 @@ const getStats = async (req, res) => {
   try {
     const [
       totalUsers,
+      activeUsers,
       totalReports,
       pendingReports,
       resolvedReports,
@@ -34,11 +35,12 @@ const getStats = async (req, res) => {
       currentJourneyWindow,
       previousJourneyWindow,
     ] = await Promise.all([
-      User.countDocuments({ role: 'user' }),
+      User.countDocuments({ role: { $in: ['user', 'authority', 'admin'] } }),
+      User.countDocuments({ role: { $in: ['user', 'authority', 'admin'] }, isActive: true }),
       Report.countDocuments(),
       Report.countDocuments({ status: 'pending' }),
       Report.countDocuments({ status: { $in: ['solved', 'resolved', 'closed'] } }),
-      User.countDocuments({ idVerificationStatus: 'pending' }),
+      User.countDocuments({ role: { $in: ['user', 'authority'] }, idVerificationStatus: 'pending' }),
       require('../models/Stream').countDocuments({ status: 'active' }),
       Report.countDocuments({ riskScore: { $gte: 75 } }),
       Report.countDocuments({ 'escalation.escalated': true }),
@@ -118,6 +120,7 @@ const getStats = async (req, res) => {
       success: true,
       stats: {
         totalUsers,
+        activeUsers,
         totalReports,
         pendingReports,
         resolvedReports,
@@ -334,7 +337,13 @@ const getAllUsers = async (req, res) => {
     const page  = Math.max(parseInt(req.query.page)  || 1, 1);
     const limit = Math.min(parseInt(req.query.limit) || 20, 100);
     const skip  = (page - 1) * limit;
-    const filter = { role: 'user' };
+    const allowedRoles = ['user', 'authority', 'admin'];
+    const requestedRole = String(req.query.role || '').trim().toLowerCase();
+    const filter = {
+      role: requestedRole && allowedRoles.includes(requestedRole)
+        ? requestedRole
+        : { $in: allowedRoles },
+    };
 
     if (req.query.verificationStatus) filter.idVerificationStatus = req.query.verificationStatus;
     if (req.query.ageGroup === 'adult') {
@@ -566,7 +575,7 @@ const getAuditLogs = async (req, res) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate('actor', 'name email role'),
+        .populate('actor', 'name email role profilePhoto'),
       AuditLog.countDocuments(filter),
     ]);
 

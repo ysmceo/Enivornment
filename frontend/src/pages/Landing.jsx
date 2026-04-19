@@ -101,7 +101,7 @@ const PROCESS = [
 ]
 
 const ABOUT_MISSION =
-  'True Crime Hood is a community-driven crime reporting and public safety platform designed to help citizens report, track, and respond to criminal activity and environmental hazards in real time. Our mission is to strengthen public safety, support faster response from authorities, and give communities a trusted voice in protecting their neighborhoods.'
+  'VOV CRIME is a community-driven public safety platform designed to help citizens report, track, and respond to criminal activity and environmental hazards in real time. Our mission is to strengthen public safety, support faster response from authorities, and give communities a trusted voice in protecting their neighborhoods.'
 
 const TIMELINE = [
   {
@@ -119,7 +119,7 @@ const TIMELINE = [
 ]
 
 const ABOUT_HELP_POINTS = [
-  'Fast, accessible crime reporting with evidence upload',
+  'Fast, accessible incident reporting with evidence upload',
   'Real-time, location-based incident tracking',
   'Improved community awareness of nearby threats and hazards',
   'Anonymous reporting options to protect user safety',
@@ -188,7 +188,7 @@ export default function Landing() {
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 text-black flex items-center justify-center">
               <Shield className="w-4 h-4" />
             </div>
-            <span className="font-black tracking-tight text-sm sm:text-base text-amber-100">TRUE CRIME HOOD</span>
+            <span className="font-black tracking-tight text-sm sm:text-base text-amber-100">VOV CRIME</span>
           </Link>
 
           <div className="hidden md:flex items-center gap-6 text-sm">
@@ -417,7 +417,7 @@ export default function Landing() {
       <section id="testimonials" className="py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <p className="text-sm text-amber-300 font-semibold">Community Feedback</p>
-          <h2 className="text-3xl sm:text-4xl font-black mt-2 mb-8">What teams say about True Crime Hood.</h2>
+          <h2 className="text-3xl sm:text-4xl font-black mt-2 mb-8">What teams say about VOV CRIME.</h2>
           <div className="grid md:grid-cols-3 gap-5">
             {TESTIMONIALS.map((t) => (
               <article key={t.author} className="rounded-2xl border border-amber-900/25 bg-gradient-to-br from-[#17120d] to-[#182131] p-6">
@@ -439,7 +439,7 @@ export default function Landing() {
       <footer id="contact" className="pt-14 pb-8 border-t border-amber-900/20 bg-[#0f0c08]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-4 gap-8">
           <div>
-            <h4 className="font-black text-amber-100 mb-3">TRUE CRIME HOOD</h4>
+            <h4 className="font-black text-amber-100 mb-3">VOV CRIME</h4>
             <p className="text-sm text-slate-400 leading-relaxed">
               Strengthening public safety with secure reporting, professional workflows, and trusted collaboration.
             </p>
@@ -468,7 +468,7 @@ export default function Landing() {
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-10 pt-4 border-t border-amber-900/20 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between text-xs text-slate-500">
-          <p>© 2026 TRUE CRIME HOOD. All rights reserved.</p>
+          <p>© 2026 VOV CRIME. All rights reserved.</p>
           <div className="flex items-center gap-4">
             <a href="#" className="hover:text-amber-300">Privacy Policy</a>
             <a href="#" className="hover:text-amber-300">Terms</a>

@@ -20,7 +20,7 @@ export default function Login() {
     if (!result.success) {
       if (result.message === 'Invalid admin secret code.' && !adminMode) {
         setAdminMode(true)
-        toast.error('Admin login requires secret code. Admin mode has been enabled for you.')
+        toast.error('Admin sign-in requires a secret code. Admin mode has been enabled.')
         return
       }
       toast.error(result.message)
@@ -130,8 +130,8 @@ export default function Login() {
           )}
 
           <p className="text-xs text-slate-400">
-            Tip: For admin access, switch to <span className="font-semibold">Admin?</span> mode and enter your secret code.
-            If login still fails with server error, start MongoDB and restart backend.
+            For admin access, switch to <span className="font-semibold">Admin Access</span> and enter your secret code.
+            If sign-in fails due to a temporary server issue, please try again shortly.
           </p>
         </form>
 
@@ -152,7 +152,7 @@ export default function Login() {
                 : 'text-slate-300 hover:text-violet-200 hover:bg-slate-700/60'
             }`}
           >
-            {adminMode ? '← Regular Login' : 'Admin?'}
+            {adminMode ? '← Standard Sign In' : 'Admin Access'}
           </button>
         </div>
       </section>

@@ -84,18 +84,23 @@ const sendHighPriorityIncidentAlerts = notifyHighPriorityIncident;
 const dispatchMultiChannel = async (notification) => {
   try {
     const { channels, payload, recipients = [] } = notification.payload || {};
+    const normalizedChannels = Array.isArray(channels) && channels.length ? channels : ['in_app'];
 
     const results = await Promise.allSettled(
-      channels.map(channel => sendViaChannel(channel, notification, recipients))
+      normalizedChannels.map(channel => sendViaChannel(channel, notification, recipients))
     );
 
     // Update status
     const successCount = results.filter(r => r.status === 'fulfilled').length;
-    const status = successCount === channels.length ? 'sent' : 'partial';
+    const status = successCount > 0 ? 'sent' : 'failed';
 
     await Notification.findByIdAndUpdate(notification._id, {
       status,
       sentAt: new Date(),
+      error:
+        successCount === normalizedChannels.length
+          ? null
+          : `Delivered ${successCount}/${normalizedChannels.length} channels`,
     });
   } catch (err) {
     await Notification.findByIdAndUpdate(notification._id, {
@@ -228,6 +233,17 @@ const sendEmail = async (notification, recipients) => {
 const sendInApp = (notification) => {
   const io = global.__io;
   if (!io) return;
+
+  if (notification.userId) {
+    io.to(`user_${String(notification.userId)}`).emit('notification', {
+      _id: notification._id,
+      title: notification.title,
+      message: notification.message,
+      payload: notification.payload,
+      createdAt: notification.createdAt,
+    });
+    return;
+  }
 
   io.emit('global_notification', {
     _id: notification._id,

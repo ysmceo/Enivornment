@@ -5,8 +5,10 @@
 const STATUS_STYLES = {
   // Report statuses
   pending:         'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
+  in_progress:     'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300',
   under_review:    'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
   investigating:   'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300',
+  solved:          'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
   resolved:        'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
   rejected:        'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
   closed:          'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
@@ -27,7 +29,9 @@ const STATUS_STYLES = {
 };
 
 const STATUS_LABELS = {
+  in_progress: 'In Progress',
   under_review:  'Under Review',
+  solved: 'Solved',
   domestic_violence: 'Domestic Violence',
   drug_activity: 'Drug Activity',
   suspicious_activity: 'Suspicious Activity',

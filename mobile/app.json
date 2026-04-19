@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Crime Reporting Mobile",
-    "slug": "crime-reporting-mobile",
+    "name": "VOV CRIME",
+    "slug": "vov-crime",
     "version": "1.0.0",
     "orientation": "portrait",
     "assetBundlePatterns": ["**/*"],

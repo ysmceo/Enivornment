@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { FileWarning, ShieldCheck, Users, Clock } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { FileWarning, ShieldCheck, Users, Clock, Star } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import AdminSidebar from '../components/AdminSidebar'
 import ThemeToggle from '../components/ThemeToggle'
@@ -8,6 +8,7 @@ import Badge from '../components/Badge'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { reportService, userService } from '../services/reportService'
 import { platformService } from '../services/platformService'
+import { useSocket } from '../hooks/useSocket'
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
 
@@ -76,18 +77,46 @@ const buildHealthChecks = (configHealth) => {
 }
 
 export default function AdminDashboard() {
+  const { on } = useSocket()
   const [stats, setStats] = useState(null)
   const [recentReports, setRecentReports] = useState([])
   const [auditLogs, setAuditLogs] = useState([])
   const [mapSummary, setMapSummary] = useState(null)
   const [configHealth, setConfigHealth] = useState(null)
   const [loading, setLoading] = useState(true)
+  const refreshInFlightRef = useRef(false)
+  const [avatarErrors, setAvatarErrors] = useState({})
+
+  const markAvatarError = (key) => {
+    setAvatarErrors((prev) => ({ ...prev, [key]: true }))
+  }
+
+  const getInitials = (name = '') => {
+    const tokens = String(name || '').trim().split(/\s+/).filter(Boolean)
+    if (!tokens.length) return 'A'
+    return tokens.slice(0, 2).map((token) => token[0]?.toUpperCase() || '').join('')
+  }
+
+  const trendDirection = stats?.journeyRatingTrend?.direction || 'flat'
+  const trendValue = Number(stats?.journeyRatingTrend?.change || 0)
+  const trendPct = Number(stats?.journeyRatingTrend?.changePct || 0)
+  const trendColor =
+    trendDirection === 'up'
+      ? 'text-emerald-600 dark:text-emerald-400'
+      : trendDirection === 'down'
+        ? 'text-rose-600 dark:text-rose-400'
+        : 'text-slate-500 dark:text-slate-400'
 
   const healthChecks = buildHealthChecks(configHealth)
   const failingChecks = healthChecks.filter((item) => !item.healthy)
 
-  useEffect(() => {
-    const load = async () => {
+  const load = useCallback(async ({ silent = false } = {}) => {
+    if (refreshInFlightRef.current) return
+    refreshInFlightRef.current = true
+
+    try {
+      if (!silent) setLoading(true)
+
       const [statsRes, reportsRes, auditRes, mapRes, healthRes] = await Promise.all([
         reportService.getAdminStats(),
         reportService.adminGetAllReports({ limit: 8 }),
@@ -100,11 +129,54 @@ export default function AdminDashboard() {
       setAuditLogs(auditRes.data.logs || [])
       setMapSummary(mapRes?.data?.summary || null)
       setConfigHealth(healthRes?.data?.configHealth || null)
-      setLoading(false)
+    } finally {
+      refreshInFlightRef.current = false
+      if (!silent) setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    load().catch(() => setLoading(false))
+  }, [load])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      load({ silent: true }).catch(() => {})
+    }, 15000)
+
+    const handleFocus = () => {
+      load({ silent: true }).catch(() => {})
     }
 
-    load().catch(() => setLoading(false))
-  }, [])
+    window.addEventListener('focus', handleFocus)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [load])
+
+  useEffect(() => {
+    const offNotification = on('notification', () => {
+      load({ silent: true }).catch(() => {})
+    })
+    const offStatusUpdate = on('report-status-update', () => {
+      load({ silent: true }).catch(() => {})
+    })
+    const offStreamStarted = on('stream:started', () => {
+      load({ silent: true }).catch(() => {})
+    })
+    const offStreamEnded = on('stream:ended', () => {
+      load({ silent: true }).catch(() => {})
+    })
+
+    return () => {
+      offNotification?.()
+      offStatusUpdate?.()
+      offStreamStarted?.()
+      offStreamEnded?.()
+    }
+  }, [load, on])
 
   if (loading) {
     return (
@@ -181,6 +253,29 @@ export default function AdminDashboard() {
             </div>
           </div>
 
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="card p-4 bg-gradient-to-br from-amber-500/10 to-transparent border border-amber-500/25">
+              <p className="text-sm text-slate-500 flex items-center gap-2"><Star className="w-4 h-4 text-amber-500" /> Average journey rating</p>
+              <p className="text-2xl font-bold text-amber-600">
+                {Number(stats?.averageJourneyRating || 0).toFixed(1)} <span className="text-sm font-medium text-slate-500">/ 5</span>
+              </p>
+              <p className={`text-xs mt-1 ${trendColor}`}>
+                {trendDirection === 'up' ? '↗' : trendDirection === 'down' ? '↘' : '→'}
+                {' '}
+                {Math.abs(trendValue).toFixed(2)} pts ({Math.abs(trendPct).toFixed(1)}%) vs previous 30 days
+              </p>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Last 30d: {Number(stats?.journeyRatingTrend?.current30dAverage || 0).toFixed(1)} ({stats?.journeyRatingTrend?.current30dCount || 0} responses)
+                {' · '}
+                Previous 30d: {Number(stats?.journeyRatingTrend?.previous30dAverage || 0).toFixed(1)} ({stats?.journeyRatingTrend?.previous30dCount || 0} responses)
+              </p>
+            </div>
+            <div className="card p-4 bg-gradient-to-br from-violet-500/10 to-transparent border border-violet-500/25">
+              <p className="text-sm text-slate-500">Journey feedback responses</p>
+              <p className="text-2xl font-bold text-violet-600">{stats?.totalJourneyFeedback ?? 0}</p>
+            </div>
+          </div>
+
           <div className="grid lg:grid-cols-2 gap-4">
             <div className="card p-4">
               <h2 className="font-semibold mb-3">Top Hotspot States</h2>
@@ -221,7 +316,7 @@ export default function AdminDashboard() {
           <div className="card overflow-hidden">
             <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
               <h2 className="font-semibold">Latest Reports</h2>
-              <Link to="/admin/reports" className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold">Open queue</Link>
+              <Link to="/admin/reports" className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold">Open Review Queue</Link>
             </div>
 
             <div className="overflow-x-auto">
@@ -259,9 +354,26 @@ export default function AdminDashboard() {
                 <p className="p-4 text-sm text-slate-500">No audit activity yet.</p>
               ) : (
                 auditLogs.map((log) => (
-                  <div key={log._id} className="p-4 text-sm">
-                    <p className="font-semibold text-slate-800 dark:text-slate-200">{log.action}</p>
-                    <p className="text-xs text-slate-500">{log.entityType} · {new Date(log.createdAt).toLocaleString()}</p>
+                  <div key={log._id} className="p-4 text-sm flex items-start gap-3">
+                    {log?.actor?.profilePhoto && !avatarErrors[log._id] ? (
+                      <img
+                        src={log.actor.profilePhoto}
+                        alt={`${log?.actor?.name || 'Actor'} profile`}
+                        className="w-9 h-9 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+                        onError={() => markAvatarError(log._id)}
+                      />
+                    ) : (
+                      <div className="w-9 h-9 rounded-full bg-indigo-100 dark:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 text-xs font-semibold flex items-center justify-center">
+                        {getInitials(log?.actor?.name || 'System')}
+                      </div>
+                    )}
+
+                    <div>
+                      <p className="font-semibold text-slate-800 dark:text-slate-200">{log.action}</p>
+                      <p className="text-xs text-slate-500">
+                        {log?.actor?.name || 'System'}{log?.actor?.role ? ` (${log.actor.role})` : ''} · {log.entityType} · {new Date(log.createdAt).toLocaleString()}
+                      </p>
+                    </div>
                   </div>
                 ))
               )}

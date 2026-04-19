@@ -20,7 +20,7 @@ const SOSPage = () => {
   // Redirect if not verified
   useEffect(() => {
     if (!user || user.idVerificationStatus !== 'verified') {
-      toast.error('SOS requires verified ID. Please complete verification.');
+      toast.error('SOS access requires ID verification. Please complete verification first.');
       navigate('/dashboard');
     }
   }, [user, navigate]);
@@ -45,13 +45,13 @@ const SOSPage = () => {
     try {
       const currentLoc = await getCurrentLocation();
       const response = await api.post('/sos', {
-        title: 'Emergency SOS - Help Needed Now!',
-        description: 'Live location tracking activated. Authorities notified.',
+        title: 'Emergency SOS - Immediate Assistance Required',
+        description: 'Live location tracking activated and authorities notified.',
         latitude: currentLoc.latitude,
         longitude: currentLoc.longitude,
       });
 
-      toast.success('🚨 SOS ACTIVATED! Help dispatched. Tracking live.');
+      toast.success('SOS activated. Emergency response has been notified.');
       setSosActive(response.data.alert);
       setLocation(currentLoc);
 
@@ -99,7 +99,7 @@ const SOSPage = () => {
       if (sosActive?._id) {
         await api.post(`/sos/${sosActive._id}/cancel`);
       }
-      toast.success('SOS cancelled.');
+      toast.success('SOS deactivated.');
     } catch {}
     setSosActive(null);
     setTracking(false);
@@ -133,7 +133,7 @@ const SOSPage = () => {
           </div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Emergency SOS</h1>
           <p className="text-lg text-gray-600 dark:text-gray-300 mb-6 max-w-md mx-auto">
-            One-tap emergency alert with live location & video. Authorities notified instantly.
+            One-tap emergency alert with live location and video support. Authorities are notified immediately.
           </p>
         </header>
 
@@ -150,13 +150,13 @@ const SOSPage = () => {
               🚨 EMERGENCY SOS
               <Phone className="w-8 h-8" />
             </button>
-            <p className="text-xs text-gray-500 mt-4">Verified user only. Live tracks your position.</p>
+            <p className="text-xs text-gray-500 mt-4">Available to verified users. Live tracking shares your location with responders.</p>
           </div>
         ) : (
           <div className="space-y-4">
             <div className="card p-6 bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800">
               <h2 className="font-bold text-xl text-red-900 dark:text-red-100 mb-2">SOS ACTIVE</h2>
-              <p className="text-red-800 dark:text-red-200">Authorities notified. Do not close this page.</p>
+              <p className="text-red-800 dark:text-red-200">Authorities have been notified. Keep this page open.</p>
             </div>
 
             <div className="card p-4 space-y-2">
@@ -181,7 +181,7 @@ const SOSPage = () => {
                 className="btn-secondary w-full h-16 text-xl font-bold hover:bg-gray-600 transition-colors"
               >
                 <StopCircle className="w-8 h-8 inline mr-2" />
-                Cancel SOS (Safe Now)
+                Cancel SOS (I Am Safe)
               </button>
             </div>
 

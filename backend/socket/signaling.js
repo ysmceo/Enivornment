@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const Stream = require('../models/Stream');
+const StreamComment = require('../models/StreamComment');
 const User = require('../models/User');
 
 const updateViewerStats = async (roomId, viewerCount) => {
@@ -11,6 +12,8 @@ const updateViewerStats = async (roomId, viewerCount) => {
     }
   ).catch(() => {});
 };
+
+const ALLOWED_REACTIONS = ['❤️', '🔥', '👏', '👍', '😂', '😮'];
 
 const endStreamRecord = async (roomId) => {
   const stream = await Stream.findOne({ roomId, status: 'active' }).catch(() => null);
@@ -30,6 +33,8 @@ const endStreamRecord = async (roomId) => {
 
 const registerSignalingHandlers = (io) => {
   const rooms = new Map();
+  const commentRateMap = new Map();
+  const likeByRoom = new Map();
 
   io.use(async (socket, next) => {
     try {
@@ -43,7 +48,7 @@ const registerSignalingHandlers = (io) => {
       }
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await User.findById(decoded.id).select('role isActive idVerificationStatus');
+      const user = await User.findById(decoded.id).select('name role isActive idVerificationStatus');
 
       if (!user || !user.isActive) {
         socket.data.user = null;
@@ -52,6 +57,7 @@ const registerSignalingHandlers = (io) => {
 
       socket.data.user = {
         id: String(user._id),
+        name: user.name || 'User',
         role: user.role,
         idVerificationStatus: user.idVerificationStatus,
       };
@@ -68,9 +74,15 @@ const registerSignalingHandlers = (io) => {
       rooms.set(roomId, {
         streamerSocketId: null,
         viewerSocketIds: new Set(),
+        reactionCounts: {},
       });
     }
     return rooms.get(roomId);
+  };
+
+  const getLikeSet = (roomId) => {
+    if (!likeByRoom.has(roomId)) likeByRoom.set(roomId, new Set());
+    return likeByRoom.get(roomId);
   };
 
   const emitViewerCount = (roomId) => {
@@ -95,9 +107,16 @@ const registerSignalingHandlers = (io) => {
         reason: 'Streamer disconnected',
       });
 
+      io.emit('stream:ended', {
+        roomId,
+        streamId: roomId,
+        endedAt: new Date().toISOString(),
+      });
+
       await endStreamRecord(roomId);
 
       rooms.delete(roomId);
+      likeByRoom.delete(roomId);
       return;
     }
 
@@ -113,6 +132,7 @@ const registerSignalingHandlers = (io) => {
 
     if (!room.streamerSocketId && room.viewerSocketIds.size === 0) {
       rooms.delete(roomId);
+      likeByRoom.delete(roomId);
     }
   };
 
@@ -144,6 +164,11 @@ const registerSignalingHandlers = (io) => {
         return;
       }
 
+      if (!socket.data.user?.id) {
+        ack({ ok: false, error: 'Authentication required before joining stream.' });
+        return;
+      }
+
       if (!['streamer', 'viewer', 'admin'].includes(role)) {
         ack({ ok: false, error: 'Invalid role. Use streamer, viewer, or admin.' });
         return;
@@ -161,12 +186,12 @@ const registerSignalingHandlers = (io) => {
           return;
         }
 
-        if (user.role !== 'user') {
-          ack({ ok: false, error: 'Only user accounts can start a stream.' });
+        if (user.role !== 'user' && user.role !== 'admin') {
+          ack({ ok: false, error: 'Only verified users or admins can start a stream.' });
           return;
         }
 
-        if (user.idVerificationStatus !== 'verified') {
+        if (user.role === 'user' && user.idVerificationStatus !== 'verified') {
           ack({ ok: false, error: 'Identity verification is required before streaming.' });
           return;
         }
@@ -206,6 +231,8 @@ const registerSignalingHandlers = (io) => {
         role,
         streamerSocketId: room.streamerSocketId,
         viewerCount: room.viewerSocketIds.size,
+        likesCount: getLikeSet(roomId).size,
+        reactionCounts: room.reactionCounts || {},
       };
 
       ack(response);
@@ -215,6 +242,211 @@ const registerSignalingHandlers = (io) => {
           roomId,
           streamerSocketId: room.streamerSocketId,
         });
+      }
+    });
+
+    socket.on('stream:comments:load', async ({ roomId, limit = 40 } = {}, ack = () => {}) => {
+      try {
+        if (!roomId) {
+          ack({ ok: false, error: 'roomId is required.' });
+          return;
+        }
+
+        const safeLimit = Math.max(1, Math.min(100, Number(limit) || 40));
+        const comments = await StreamComment.find({ roomId, deleted: { $ne: true } })
+          .sort({ createdAt: -1 })
+          .limit(safeLimit)
+          .lean();
+
+        ack({ ok: true, comments: comments.reverse() });
+      } catch {
+        ack({ ok: false, error: 'Failed to load stream comments.' });
+      }
+    });
+
+    socket.on('stream:comment:send', async ({ roomId, message } = {}, ack = () => {}) => {
+      try {
+        const user = socket.data.user;
+        if (!user?.id) {
+          ack({ ok: false, error: 'Authentication required to comment.' });
+          return;
+        }
+
+        const normalizedMessage = String(message || '').trim();
+        if (!roomId || !normalizedMessage) {
+          ack({ ok: false, error: 'roomId and message are required.' });
+          return;
+        }
+
+        if (normalizedMessage.length > 800) {
+          ack({ ok: false, error: 'Comment is too long.' });
+          return;
+        }
+
+        const now = Date.now();
+        const recent = (commentRateMap.get(socket.id) || []).filter((ts) => now - ts < 5000);
+        if (recent.length >= 5) {
+          ack({ ok: false, error: 'You are commenting too fast. Please slow down.' });
+          return;
+        }
+        recent.push(now);
+        commentRateMap.set(socket.id, recent);
+
+        const stream = await Stream.findOne({ roomId, status: 'active' }).select('_id roomId');
+        if (!stream) {
+          ack({ ok: false, error: 'This stream is no longer active.' });
+          return;
+        }
+
+        const created = await StreamComment.create({
+          streamId: stream._id,
+          roomId: stream.roomId,
+          senderId: user.id,
+          senderName: user.name || 'User',
+          senderRole: user.role,
+          message: normalizedMessage,
+        });
+
+        const payload = {
+          _id: created._id,
+          roomId: created.roomId,
+          senderId: created.senderId,
+          senderName: created.senderName,
+          senderRole: created.senderRole,
+          message: created.message,
+          createdAt: created.createdAt,
+        };
+
+        io.to(roomId).emit('stream:comment:new', payload);
+        ack({ ok: true, comment: payload });
+      } catch {
+        ack({ ok: false, error: 'Failed to send comment.' });
+      }
+    });
+
+    socket.on('stream:comment:delete', async ({ roomId, commentId } = {}, ack = () => {}) => {
+      try {
+        const user = socket.data.user;
+        if (!user?.id) {
+          ack({ ok: false, error: 'Authentication required.' });
+          return;
+        }
+
+        if (!roomId || !commentId) {
+          ack({ ok: false, error: 'roomId and commentId are required.' });
+          return;
+        }
+
+        const comment = await StreamComment.findOne({ _id: commentId, roomId });
+        if (!comment || comment.deleted) {
+          ack({ ok: false, error: 'Comment not found.' });
+          return;
+        }
+
+        const canModerate = user.role === 'admin';
+        const isOwnComment = String(comment.senderId) === String(user.id);
+        if (!canModerate && !isOwnComment) {
+          ack({ ok: false, error: 'Not authorized to remove this comment.' });
+          return;
+        }
+
+        comment.deleted = true;
+        comment.deletedBy = user.id;
+        await comment.save();
+
+        io.to(roomId).emit('stream:comment:removed', {
+          roomId,
+          commentId,
+          removedByRole: user.role,
+        });
+
+        ack({ ok: true, commentId });
+      } catch {
+        ack({ ok: false, error: 'Failed to remove comment.' });
+      }
+    });
+
+    socket.on('stream:like:toggle', async ({ roomId } = {}, ack = () => {}) => {
+      try {
+        const user = socket.data.user;
+        if (!user?.id || !roomId) {
+          ack({ ok: false, error: 'Authentication and roomId are required.' });
+          return;
+        }
+
+        const stream = await Stream.findOne({ roomId, status: 'active' }).select('_id roomId likesCount');
+        if (!stream) {
+          ack({ ok: false, error: 'Stream is not active.' });
+          return;
+        }
+
+        const likeSet = getLikeSet(roomId);
+        const key = String(user.id);
+        let liked;
+        if (likeSet.has(key)) {
+          likeSet.delete(key);
+          liked = false;
+        } else {
+          likeSet.add(key);
+          liked = true;
+        }
+
+        const likesCount = likeSet.size;
+        await Stream.findOneAndUpdate({ roomId, status: 'active' }, { likesCount }).catch(() => {});
+
+        io.to(roomId).emit('stream:likes:update', { roomId, likesCount });
+        ack({ ok: true, liked, likesCount });
+      } catch {
+        ack({ ok: false, error: 'Failed to update like.' });
+      }
+    });
+
+    socket.on('stream:reaction:send', async ({ roomId, emoji } = {}, ack = () => {}) => {
+      try {
+        const user = socket.data.user;
+        if (!user?.id || !roomId || !emoji) {
+          ack({ ok: false, error: 'Authentication, roomId and emoji are required.' });
+          return;
+        }
+
+        if (!ALLOWED_REACTIONS.includes(emoji)) {
+          ack({ ok: false, error: 'Unsupported reaction.' });
+          return;
+        }
+
+        const stream = await Stream.findOne({ roomId, status: 'active' }).select('_id roomId reactionCounts');
+        if (!stream) {
+          ack({ ok: false, error: 'Stream is not active.' });
+          return;
+        }
+
+        const room = ensureRoom(roomId);
+        const currentCounts = room.reactionCounts || {};
+        const next = Number(currentCounts[emoji] || 0) + 1;
+        currentCounts[emoji] = next;
+        room.reactionCounts = currentCounts;
+
+        await Stream.findOneAndUpdate(
+          { roomId, status: 'active' },
+          { $inc: { [`reactionCounts.${emoji}`]: 1 } }
+        ).catch(() => {});
+
+        io.to(roomId).emit('stream:reaction:new', {
+          roomId,
+          emoji,
+          senderName: user.name || 'User',
+          senderRole: user.role,
+          createdAt: new Date().toISOString(),
+        });
+
+        io.to(roomId).emit('stream:reactions:update', {
+          roomId,
+          reactionCounts: currentCounts,
+        });
+
+        ack({ ok: true, reactionCounts: currentCounts });
+      } catch {
+        ack({ ok: false, error: 'Failed to send reaction.' });
       }
     });
 
@@ -253,6 +485,7 @@ const registerSignalingHandlers = (io) => {
     });
 
     socket.on('disconnect', async () => {
+      commentRateMap.delete(socket.id);
       await cleanupSocket(socket);
     });
   });

@@ -139,6 +139,50 @@ export function AuthProvider({ children }) {
       toast(payload?.message || 'New platform notification', { icon: '🔔' })
     })
 
+    socket.on('stream:started', (payload) => {
+      const streamId = payload?.streamId || payload?.roomId
+      if (!streamId) return
+
+      const starterName = payload?.startedBy?.name || 'A user'
+      const title = payload?.title || 'Live stream'
+
+      setNotifications((prev) => [{
+        type: 'stream_started',
+        message: `${starterName} is now live: ${title}`,
+        payload,
+        createdAt: new Date().toISOString(),
+      }, ...prev].slice(0, 100))
+
+      toast.custom((t) => (
+        <div className="max-w-sm rounded-xl border border-indigo-200 bg-white px-4 py-3 shadow-lg">
+          <p className="text-sm font-semibold text-slate-900">{starterName} started a live stream</p>
+          <p className="text-xs text-slate-600 mt-1 truncate">{title}</p>
+          <button
+            type="button"
+            className="mt-3 inline-flex items-center rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
+            onClick={() => {
+              toast.dismiss(t.id)
+              window.location.assign(`/live/${streamId}`)
+            }}
+          >
+            Join Live
+          </button>
+        </div>
+      ), { duration: 10000 })
+    })
+
+    socket.on('stream:ended', (payload) => {
+      const streamId = payload?.streamId || payload?.roomId
+      if (!streamId) return
+
+      setNotifications((prev) => [{
+        type: 'stream_ended',
+        message: `A live stream has ended (${streamId}).`,
+        payload,
+        createdAt: new Date().toISOString(),
+      }, ...prev].slice(0, 100))
+    })
+
     return () => {
       socket.disconnect()
     }

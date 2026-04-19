@@ -16,7 +16,7 @@ const PAGES = [
     route: '/',
     tag: 'Public',
     tagColor: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
-    description: 'Hero section, features, how-it-works, statistics & call-to-action.',
+    description: 'Hero section, feature highlights, workflow overview, platform statistics, and call to action.',
     starred: true,
   },
   {
@@ -34,7 +34,7 @@ const PAGES = [
     route: '/login',
     tag: 'Auth',
     tagColor: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-    description: 'Split-screen sign-in with demo credentials hint.',
+    description: 'Secure sign-in for citizens and administrators.',
   },
   {
     id: 'register',
@@ -42,7 +42,7 @@ const PAGES = [
     route: '/register',
     tag: 'Auth',
     tagColor: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-    description: '2-step registration with ID document upload & drag-and-drop.',
+    description: 'Registration flow with identity document and profile upload support.',
     starred: true,
   },
   /* ── User ── */
@@ -52,7 +52,7 @@ const PAGES = [
     route: '/dashboard',
     tag: 'User',
     tagColor: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
-    description: 'Report submission form, live video button, status-filtered report list.',
+    description: 'Incident submission flow, live-stream access, and status-based report tracking.',
     starred: true,
   },
   {
@@ -61,7 +61,7 @@ const PAGES = [
     route: '/live',
     tag: 'User',
     tagColor: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
-    description: 'Browse active live crime-reporting streams.',
+    description: 'Browse active True Crime Hood live streams.',
   },
   {
     id: 'live-streamer',
@@ -113,7 +113,7 @@ const PAGES = [
     route: '/admin/live',
     tag: 'Admin',
     tagColor: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-    description: 'Admin interface for monitoring active live crime streams.',
+    description: 'Administrative interface for monitoring active True Crime Hood live streams.',
   },
 ]
 
@@ -160,14 +160,14 @@ export default function Preview() {
       <header className="sticky top-0 z-50 h-14 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center gap-4 px-4 sm:px-6 shadow-sm">
         {/* Brand */}
         <a href="/" className="flex items-center gap-2 shrink-0 mr-2">
-          <img src="/logo.webp" alt="True Hero Crime Report Logo" className="h-7 w-auto object-contain" />
+          <img src="/logo.webp" alt="True Crime Hood Logo" className="h-7 w-auto object-contain" />
           <span className="text-sm font-extrabold text-slate-900 dark:text-white hidden sm:block">
-            Crime<span className="text-indigo-600">Report</span>
+            TRUE <span className="text-indigo-600">CRIME HOOD</span>
           </span>
         </a>
 
         <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 shrink-0" />
-        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider shrink-0">Preview Gallery</span>
+        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider shrink-0">Page Preview Studio</span>
 
         <div className="flex-1" />
 
@@ -352,7 +352,7 @@ export default function Preview() {
             {/* Header */}
             <div className="mb-8 text-center">
               <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white mb-2">All Pages Gallery</h1>
-              <p className="text-slate-500 dark:text-slate-400 text-sm">Click any page to open full preview. Showing all {PAGES.length} routes.</p>
+              <p className="text-slate-500 dark:text-slate-400 text-sm">Select any page to open a full preview. Showing all {PAGES.length} routes.</p>
             </div>
 
             {/* Tag filter */}

@@ -1,8 +1,8 @@
 {
-  "name": "crime-reporting-workspace",
+  "name": "vov-crime-workspace",
   "private": true,
   "version": "1.0.0",
-  "description": "Workspace scripts for running backend and frontend together",
+  "description": "VOV CRIME workspace scripts for running backend and frontend together",
   "scripts": {
     "dev": "npm --prefix frontend run dev",
     "dev:all": "concurrently -n backend,frontend -c blue,magenta \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\"",

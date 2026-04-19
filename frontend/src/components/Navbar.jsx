@@ -22,6 +22,10 @@ export default function Navbar() {
 
   const [menuOpen,    setMenuOpen]    = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [avatarErrored, setAvatarErrored] = useState(false);
+
+  const profilePhotoUrl = String(user?.profilePhoto || '').trim();
+  const canRenderProfilePhoto = Boolean(profilePhotoUrl) && !avatarErrored;
 
   // Listen for real-time status update notifications
   useEffect(() => {
@@ -48,7 +52,7 @@ export default function Navbar() {
         ]
       : [
           { to: '/dashboard',   label: 'Dashboard' },
-          { to: '/my-reports',  label: 'My Reports' },
+          { to: '/cases/track', label: 'Track Cases' },
           { to: '/submit',      label: 'Submit Report' },
           { to: '/live',        label: 'Live Stream' },
         ]
@@ -69,7 +73,7 @@ export default function Navbar() {
               <Shield className="w-4.5 h-4.5 text-white" />
             </div>
             <span className="font-extrabold tracking-tight text-sm sm:text-base text-slate-900 dark:text-white">
-              TRUE <span className="bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">HERO</span> CRIME REPORT
+              VOV <span className="bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">CRIME</span>
             </span>
           </Link>
 
@@ -132,9 +136,18 @@ export default function Navbar() {
 
                 {/* User menu (desktop) */}
                 <div className="hidden md:flex items-center gap-2 pl-2 border-l border-slate-200 dark:border-slate-700">
-                  <div className="w-8 h-8 bg-gradient-to-br from-indigo-100 to-violet-100 dark:from-indigo-900/60 dark:to-violet-900/50 rounded-full flex items-center justify-center">
-                    <User className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                  </div>
+                  {canRenderProfilePhoto ? (
+                    <img
+                      src={profilePhotoUrl}
+                      alt={`${user?.name || 'User'} profile`}
+                      className="w-8 h-8 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+                      onError={() => setAvatarErrored(true)}
+                    />
+                  ) : (
+                    <div className="w-8 h-8 bg-gradient-to-br from-indigo-100 to-violet-100 dark:from-indigo-900/60 dark:to-violet-900/50 rounded-full flex items-center justify-center">
+                      <User className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                    </div>
+                  )}
                   <span className="text-sm font-medium text-slate-700 dark:text-slate-200 max-w-[120px] truncate">
                     {user.name}
                   </span>

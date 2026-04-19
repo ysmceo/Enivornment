@@ -46,6 +46,17 @@ export default function AdminUsers() {
   const [ageGroup, setAgeGroup] = useState('all')
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
+  const [avatarErrors, setAvatarErrors] = useState({})
+
+  const markAvatarError = (userId) => {
+    setAvatarErrors((prev) => ({ ...prev, [userId]: true }))
+  }
+
+  const getInitials = (name = '') => {
+    const tokens = String(name || '').trim().split(/\s+/).filter(Boolean)
+    if (!tokens.length) return 'U'
+    return tokens.slice(0, 2).map((token) => token[0]?.toUpperCase() || '').join('')
+  }
 
   const loadUsers = async ({ search = '', age = 'all' } = {}) => {
     const { data } = await userService.getAllUsers({
@@ -121,6 +132,7 @@ export default function AdminUsers() {
                   <tr>
                     <th className="table-th">Name</th>
                     <th className="table-th">Email</th>
+                    <th className="table-th">Role</th>
                     <th className="table-th">Age Group</th>
                     <th className="table-th">Verification</th>
                     <th className="table-th">Account</th>
@@ -133,8 +145,25 @@ export default function AdminUsers() {
 
                     return (
                       <tr key={u._id}>
-                        <td className="table-td">{u.name}</td>
+                        <td className="table-td">
+                          <div className="flex items-center gap-2.5">
+                            {u.profilePhoto && !avatarErrors[u._id] ? (
+                              <img
+                                src={u.profilePhoto}
+                                alt={`${u.name || 'User'} profile`}
+                                className="w-8 h-8 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+                                onError={() => markAvatarError(u._id)}
+                              />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 text-xs font-semibold flex items-center justify-center">
+                                {getInitials(u.name)}
+                              </div>
+                            )}
+                            <span className="font-medium">{u.name}</span>
+                          </div>
+                        </td>
                         <td className="table-td">{u.email}</td>
+                        <td className="table-td"><Badge status={u.role || 'user'} label={u.role || 'user'} dot /></td>
                         <td className="table-td"><Badge status={ageGroup.status} label={ageGroup.label} dot /></td>
                         <td className="table-td"><Badge status={u.idVerificationStatus || 'none'} /></td>
                         <td className="table-td"><Badge status={u.isActive ? 'active' : 'suspended'} dot /></td>

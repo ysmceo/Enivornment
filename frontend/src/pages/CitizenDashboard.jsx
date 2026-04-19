@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { AlertTriangle, Copy, MapPin } from 'lucide-react'
+import { AlertTriangle, Copy, MapPin, User as UserIcon } from 'lucide-react'
 import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet'
 import { useAuth } from '../context/AuthContext'
 import { useLanguage } from '../context/LanguageContext'
@@ -123,11 +123,14 @@ export default function CitizenDashboard() {
   const [trackingLoading, setTrackingLoading] = useState(false)
   const [lastSubmittedCaseId, setLastSubmittedCaseId] = useState('')
   const [copiedCaseCode, setCopiedCaseCode] = useState(false)
+  const [avatarErrored, setAvatarErrored] = useState(false)
   const [experienceDrafts, setExperienceDrafts] = useState({})
   const [additionalEvidenceDrafts, setAdditionalEvidenceDrafts] = useState({})
   const syncInProgressRef = useRef(false)
 
   const completedStatuses = new Set(['solved', 'resolved', 'closed'])
+  const profilePhotoUrl = String(user?.profilePhoto || '').trim()
+  const canRenderProfilePhoto = Boolean(profilePhotoUrl) && !avatarErrored
 
   const previewLat = Number(form.lat)
   const previewLng = Number(form.lng)
@@ -817,11 +820,25 @@ export default function CitizenDashboard() {
   return (
     <main className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
       <header className="card p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-indigo-600/15 via-violet-600/10 to-sky-600/10 border border-indigo-400/30">
-        <div>
+        <div className="flex items-center gap-3">
+          {canRenderProfilePhoto ? (
+            <img
+              src={profilePhotoUrl}
+              alt={`${user?.name || 'User'} profile`}
+              className="w-12 h-12 rounded-full object-cover border border-indigo-200 dark:border-indigo-700"
+              onError={() => setAvatarErrored(true)}
+            />
+          ) : (
+            <div className="w-12 h-12 rounded-full bg-indigo-100 dark:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-700 flex items-center justify-center">
+              <UserIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-300" />
+            </div>
+          )}
+          <div>
           <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-700 via-violet-700 to-sky-700 dark:from-indigo-300 dark:via-violet-300 dark:to-sky-300 bg-clip-text text-transparent">Citizen Safety Dashboard</h1>
           <p className="text-sm text-slate-600 dark:text-slate-300">
             Welcome, {user?.name}. Submit and track incidents by state with secure evidence handling.
           </p>
+          </div>
         </div>
         <div className="flex gap-2">
           <Link to="/emergency" className="btn-secondary">{t('emergencyDirectory', 'Emergency Directory')}</Link>

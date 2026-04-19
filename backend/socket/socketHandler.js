@@ -71,22 +71,33 @@ const initSocketHandler = (io) => {
       handleLeave(socket, roomId);
     });
 
-    // ── WebRTC: OFFER (streamer → viewer) ─────────────────────────────────
-    socket.on('offer', ({ roomId, offer, targetSocketId }) => {
+    // ── WebRTC legacy relay (opt-in only) ─────────────────────────────────
+    // NOTE:
+    // Dedicated live-stream signaling is handled in `socket/signaling.js`.
+    // These handlers are kept only for legacy clients that explicitly send
+    // `{ legacy: true }` to avoid cross-handler event interference.
+    socket.on('offer', ({ roomId, offer, sdp, targetSocketId, legacy }) => {
+      if (!legacy) return;
+      const payload = offer || sdp;
+      if (!payload) return;
+
       if (targetSocketId) {
-        io.to(targetSocketId).emit('offer', { offer, fromSocketId: socket.id });
-      } else {
-        socket.to(roomId).emit('offer', { offer, fromSocketId: socket.id });
+        io.to(targetSocketId).emit('offer', { offer: payload, fromSocketId: socket.id });
+      } else if (roomId) {
+        socket.to(roomId).emit('offer', { offer: payload, fromSocketId: socket.id });
       }
     });
 
-    // ── WebRTC: ANSWER (viewer → streamer) ────────────────────────────────
-    socket.on('answer', ({ answer, targetSocketId }) => {
-      io.to(targetSocketId).emit('answer', { answer, fromSocketId: socket.id });
+    socket.on('answer', ({ answer, sdp, targetSocketId, legacy }) => {
+      if (!legacy || !targetSocketId) return;
+      const payload = answer || sdp;
+      if (!payload) return;
+      io.to(targetSocketId).emit('answer', { answer: payload, fromSocketId: socket.id });
     });
 
-    // ── WebRTC: ICE CANDIDATE (bidirectional) ─────────────────────────────
-    socket.on('ice-candidate', ({ candidate, targetSocketId, roomId }) => {
+    socket.on('ice-candidate', ({ candidate, targetSocketId, roomId, legacy }) => {
+      if (!legacy || !candidate) return;
+
       if (targetSocketId) {
         io.to(targetSocketId).emit('ice-candidate', { candidate, fromSocketId: socket.id });
       } else if (roomId) {

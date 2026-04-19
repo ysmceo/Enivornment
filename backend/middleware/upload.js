@@ -85,7 +85,7 @@ const buildFileFilter = (allowedTypes) => (req, file, cb) => {
 const idStorage = new CloudinaryStorage({
   cloudinary,
   params: async (req) => ({
-    folder:        'crime-reporting/government-ids',
+    folder:        'vov-crime/government-ids',
     allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
     resource_type: 'auto',
     // Tag with user ID for traceability
@@ -104,7 +104,7 @@ const uploadGovernmentId = multer({
 const selfieStorage = new CloudinaryStorage({
   cloudinary,
   params: async (req) => ({
-    folder: 'crime-reporting/verification-selfies',
+    folder: 'vov-crime/verification-selfies',
     allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'avif'],
     resource_type: 'image',
     transformation: [{ quality: 'auto', fetch_format: 'auto' }],
@@ -123,7 +123,7 @@ const uploadSelfie = multer({
 const profilePhotoStorage = new CloudinaryStorage({
   cloudinary,
   params: async (req) => ({
-    folder: 'crime-reporting/profile-photos',
+    folder: 'vov-crime/profile-photos',
     allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
     resource_type: 'image',
     transformation: [{ quality: 'auto', fetch_format: 'auto' }],
@@ -145,7 +145,7 @@ const mediaStorage = new CloudinaryStorage({
     const isVideo    = ALLOWED_VIDEO_TYPES.includes(file.mimetype);
     const resourceType = isVideo ? 'video' : 'image';
     return {
-      folder:        `crime-reporting/reports/${req.user?._id}`,
+      folder:        `vov-crime/reports/${req.user?._id}`,
       resource_type: resourceType,
       allowed_formats: isVideo ? ['mp4', 'webm', 'mov'] : ['jpg', 'jpeg', 'png', 'webp', 'gif'],
       transformation: isVideo
