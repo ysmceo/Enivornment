@@ -174,6 +174,26 @@ const userSchema = new mongoose.Schema(
       match: [/^\+?[\d\s\-()]{7,20}$/, 'Invalid phone number'],
     },
 
+    dateOfBirth: {
+      type: Date,
+      default: null,
+    },
+
+    isAdult: {
+      type: Boolean,
+      default: null,
+    },
+
+    adultConsentAccepted: {
+      type: Boolean,
+      default: false,
+    },
+
+    minorConsentAccepted: {
+      type: Boolean,
+      default: false,
+    },
+
     idCardType: {
       type: String,
       enum: ID_CARD_TYPES,

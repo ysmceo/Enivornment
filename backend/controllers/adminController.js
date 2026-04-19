@@ -7,6 +7,14 @@ const { recordAuditLog } = require('../services/auditService');
 const { queueNotification } = require('../services/notificationService');
 const { upsertLawEnforcementCase } = require('../services/lawEnforcementService');
 
+const getReadableStatus = (status) => {
+  if (status === 'in_progress') return 'in progress';
+  if (status === 'investigating') return 'under investigation';
+  if (status === 'under_review') return 'under review';
+  if (status === 'solved') return 'solved';
+  return status;
+};
+
 // ─── DASHBOARD STATS ──────────────────────────────────────────────────────
 /**
  * GET /api/admin/stats
@@ -22,16 +30,74 @@ const getStats = async (req, res) => {
       activeStreams,
       highRiskReports,
       escalatedReports,
+      journeyFeedbackSummary,
+      currentJourneyWindow,
+      previousJourneyWindow,
     ] = await Promise.all([
       User.countDocuments({ role: 'user' }),
       Report.countDocuments(),
       Report.countDocuments({ status: 'pending' }),
-      Report.countDocuments({ status: 'resolved' }),
+      Report.countDocuments({ status: { $in: ['solved', 'resolved', 'closed'] } }),
       User.countDocuments({ idVerificationStatus: 'pending' }),
       require('../models/Stream').countDocuments({ status: 'active' }),
       Report.countDocuments({ riskScore: { $gte: 75 } }),
       Report.countDocuments({ 'escalation.escalated': true }),
+      Report.aggregate([
+        {
+          $match: {
+            'experience.submittedAt': { $ne: null },
+            'experience.rating': { $gte: 1, $lte: 5 },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            averageJourneyRating: { $avg: '$experience.rating' },
+            totalJourneyFeedback: { $sum: 1 },
+          },
+        },
+      ]),
+      Report.aggregate([
+        {
+          $match: {
+            'experience.submittedAt': {
+              $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+            },
+            'experience.rating': { $gte: 1, $lte: 5 },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            averageRating: { $avg: '$experience.rating' },
+            total: { $sum: 1 },
+          },
+        },
+      ]),
+      Report.aggregate([
+        {
+          $match: {
+            'experience.submittedAt': {
+              $gte: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
+              $lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+            },
+            'experience.rating': { $gte: 1, $lte: 5 },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            averageRating: { $avg: '$experience.rating' },
+            total: { $sum: 1 },
+          },
+        },
+      ]),
     ]);
+
+    const currentAvg = Number(currentJourneyWindow?.[0]?.averageRating || 0);
+    const previousAvg = Number(previousJourneyWindow?.[0]?.averageRating || 0);
+    const change = currentAvg - previousAvg;
+    const changePct = previousAvg > 0 ? (change / previousAvg) * 100 : 0;
 
     // Reports in last 7 days
     const since7days  = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -59,6 +125,17 @@ const getStats = async (req, res) => {
         activeStreams,
         highRiskReports,
         escalatedReports,
+        averageJourneyRating: Number(journeyFeedbackSummary?.[0]?.averageJourneyRating || 0),
+        totalJourneyFeedback: Number(journeyFeedbackSummary?.[0]?.totalJourneyFeedback || 0),
+        journeyRatingTrend: {
+          current30dAverage: currentAvg,
+          previous30dAverage: previousAvg,
+          current30dCount: Number(currentJourneyWindow?.[0]?.total || 0),
+          previous30dCount: Number(previousJourneyWindow?.[0]?.total || 0),
+          change,
+          changePct,
+          direction: change > 0 ? 'up' : change < 0 ? 'down' : 'flat',
+        },
         recentReports: recentCount,
         reportsByCategory: byCategory,
         reportsByStatus: byStatus,
@@ -85,6 +162,8 @@ const getAllReports = async (req, res) => {
     if (req.query.category) filter.category = req.query.category;
     if (req.query.search) {
       filter.$or = [
+        { caseId:      { $regex: req.query.search, $options: 'i' } },
+        { 'reporterContact.email': { $regex: req.query.search, $options: 'i' } },
         { title:       { $regex: req.query.search, $options: 'i' } },
         { description: { $regex: req.query.search, $options: 'i' } },
       ];
@@ -121,6 +200,8 @@ const updateReportStatus = async (req, res) => {
     const report = await Report.findById(req.params.id);
     if (!report) return res.status(404).json({ success: false, message: 'Report not found.' });
 
+    const previousStatus = report.status;
+
     report.status = status;
     if (adminNotes)       report.adminNotes       = adminNotes;
     if (rejectionReason)  report.rejectionReason  = rejectionReason;
@@ -135,6 +216,8 @@ const updateReportStatus = async (req, res) => {
     });
 
     await report.save();
+
+    const reportOwner = await User.findById(report.submittedBy).select('email phone name');
 
     const integrationSync = await upsertLawEnforcementCase({
       report,
@@ -158,11 +241,29 @@ const updateReportStatus = async (req, res) => {
     const notification = await queueNotification({
       userId: report.submittedBy,
       reportId: report._id,
-      channel: 'in_app',
+      channel: 'system',
       type: 'report_status_update',
       title: 'Report status updated',
-      message: `Your report is now marked as ${status}.`,
-      payload: { reportId: report._id, status, priority: report.priority },
+      message: `Case ${report.caseId} is now ${getReadableStatus(status)}.`,
+      payload: {
+        reportId: report._id,
+        caseId: report.caseId,
+        previousStatus,
+        status,
+        statusLabel: getReadableStatus(status),
+        priority: report.priority,
+        channels: ['in_app', ...(reportOwner?.email ? ['email'] : []), ...(reportOwner?.phone ? ['sms'] : [])],
+        recipients: reportOwner
+          ? [
+              {
+                userId: report.submittedBy,
+                name: reportOwner.name,
+                email: reportOwner.email,
+                phone: reportOwner.phone,
+              },
+            ]
+          : [],
+      },
     });
 
     const io = req.app.get('io');
@@ -172,6 +273,14 @@ const updateReportStatus = async (req, res) => {
         title: notification.title,
         message: notification.message,
         payload: notification.payload,
+      });
+      io.to(`user_${String(report.submittedBy)}`).emit('report-status-update', {
+        message: notification.message,
+        reportId: report._id,
+        caseId: report.caseId,
+        status,
+        statusLabel: getReadableStatus(status),
+        updatedAt: report.updatedAt,
       });
     }
 
@@ -228,11 +337,30 @@ const getAllUsers = async (req, res) => {
     const filter = { role: 'user' };
 
     if (req.query.verificationStatus) filter.idVerificationStatus = req.query.verificationStatus;
-    if (req.query.search) {
+    if (req.query.ageGroup === 'adult') {
+      filter.isAdult = true;
+    } else if (req.query.ageGroup === 'minor') {
+      filter.isAdult = false;
+    } else if (req.query.ageGroup === 'unknown') {
       filter.$or = [
+        ...(Array.isArray(filter.$or) ? filter.$or : []),
+        { isAdult: null },
+        { isAdult: { $exists: false } },
+      ];
+    }
+
+    if (req.query.search) {
+      const searchOr = [
         { name:  { $regex: req.query.search, $options: 'i' } },
         { email: { $regex: req.query.search, $options: 'i' } },
       ];
+
+      if (Array.isArray(filter.$or) && filter.$or.length > 0) {
+        filter.$and = [{ $or: filter.$or }, { $or: searchOr }];
+        delete filter.$or;
+      } else {
+        filter.$or = searchOr;
+      }
     }
 
     const [users, total] = await Promise.all([
@@ -373,12 +501,22 @@ const verifyGovernmentId = async (req, res) => {
 
     const hasGovernmentId = Boolean(user.governmentIdUrl);
     const hasSelfie = Boolean(user.selfieUrl);
+    const isAdult = user.isAdult !== false;
 
-    if (action === 'approve' && (!hasGovernmentId || !hasSelfie)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Cannot approve verification until both government ID and selfie are uploaded.',
-      });
+    if (action === 'approve') {
+      if (isAdult && (!hasGovernmentId || !hasSelfie)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Cannot approve verification until both government ID and selfie are uploaded for adult accounts.',
+        });
+      }
+
+      if (!isAdult && !hasSelfie) {
+        return res.status(400).json({
+          success: false,
+          message: 'Cannot approve verification for minor accounts until selfie is uploaded.',
+        });
+      }
     }
 
     user.idVerificationStatus = action === 'approve' ? 'verified' : 'rejected';

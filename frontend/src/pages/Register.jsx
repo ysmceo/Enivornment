@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
@@ -27,10 +27,29 @@ export default function Register() {
     email: '',
     password: '',
     phone: '',
+    dateOfBirth: '',
+    adultConsentAccepted: false,
+    minorConsentAccepted: false,
     state: 'FCT',
     idCardType: 'nin',
     idCardNumber: '',
   })
+
+  const age = useMemo(() => {
+    if (!form.dateOfBirth) return null
+    const dob = new Date(form.dateOfBirth)
+    if (Number.isNaN(dob.getTime())) return null
+
+    const today = new Date()
+    let years = today.getFullYear() - dob.getFullYear()
+    const monthDiff = today.getMonth() - dob.getMonth()
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+      years -= 1
+    }
+    return years
+  }, [form.dateOfBirth])
+
+  const isAdult = age !== null && age >= 18
 
   const idCardTypeLabels = {
     nin: 'NIN',
@@ -63,7 +82,22 @@ export default function Register() {
   const onSubmit = async (e) => {
     e.preventDefault()
 
-    if (cloudinaryConfigured) {
+    if (!form.dateOfBirth) {
+      toast.error('Please select your date of birth')
+      return
+    }
+
+    if (isAdult && !form.adultConsentAccepted) {
+      toast.error('Users aged 18 and above must accept consent before registration')
+      return
+    }
+
+    if (age !== null && !isAdult && !form.minorConsentAccepted) {
+      toast.error('Users below 18 must accept the minor consent before registration')
+      return
+    }
+
+    if (isAdult && cloudinaryConfigured) {
       if (!form.idCardNumber.trim()) {
         toast.error('Please enter your ID card number')
         return
@@ -75,7 +109,19 @@ export default function Register() {
       }
     }
 
-    const result = await register(form)
+    const registerPayload = {
+      name: form.name,
+      email: form.email,
+      password: form.password,
+      phone: form.phone,
+      state: form.state,
+      dateOfBirth: form.dateOfBirth,
+      adultConsentAccepted: isAdult ? form.adultConsentAccepted : false,
+      minorConsentAccepted: !isAdult ? form.minorConsentAccepted : false,
+      idCardType: isAdult ? form.idCardType : undefined,
+    }
+
+    const result = await register(registerPayload)
     if (!result.success) {
       toast.error(result.message)
       return
@@ -93,7 +139,7 @@ export default function Register() {
       }
     }
 
-    if (cloudinaryConfigured) {
+    if (isAdult && cloudinaryConfigured) {
       try {
         await authService.uploadGovernmentId(idFile, form.idCardNumber)
         await refreshUser()
@@ -104,7 +150,7 @@ export default function Register() {
         toast('You can still continue and sign in. Upload can be retried later.', { icon: 'ℹ️' })
       }
     } else {
-      toast('Government ID upload is not configured yet (Cloudinary keys are placeholders). Account creation can still continue.', { icon: 'ℹ️' })
+      toast('Government ID upload is temporarily unavailable. Account creation can still continue.', { icon: 'ℹ️' })
     }
 
     navigate('/dashboard')
@@ -119,8 +165,8 @@ export default function Register() {
       </div>
 
       <section className="card p-6 w-full max-w-lg relative border border-emerald-500/30 bg-gradient-to-br from-slate-900/95 to-slate-800/90 shadow-2xl shadow-emerald-900/25">
-        <h1 className="text-2xl font-bold text-white">Create account</h1>
-        <p className="text-sm text-slate-300 mt-1">Register across all 36 states + FCT for secure civic reporting.</p>
+        <h1 className="text-2xl font-bold text-white">Create Account</h1>
+        <p className="text-sm text-slate-300 mt-1">Register across Nigeria’s 36 states and the FCT for secure civic reporting.</p>
 
         <form onSubmit={onSubmit} className="space-y-4 mt-5">
           <div>
@@ -145,40 +191,95 @@ export default function Register() {
               <input className="input" type="password" value={form.password} onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))} required minLength={8} />
             </div>
             <div>
+              <label className="label">Date of Birth</label>
+              <input
+                className="input"
+                type="date"
+                value={form.dateOfBirth}
+                onChange={(e) => setForm((p) => ({ ...p, dateOfBirth: e.target.value }))}
+                required
+              />
+            </div>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div>
               <label className="label">State</label>
               <select className="select" value={form.state} onChange={(e) => setForm((p) => ({ ...p, state: e.target.value }))}>
                 {states.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
+            <div className="rounded-lg border border-slate-700 bg-slate-900/70 p-3 text-xs text-slate-300">
+              <p className="font-semibold text-slate-100">Age status</p>
+              <p className="mt-1">
+                {age === null
+                  ? 'Select your date of birth to continue.'
+                  : isAdult
+                    ? `You are ${age}. Adult registration requires consent and identity details.`
+                    : `You are ${age}. Identity upload is not required for users below 18.`}
+              </p>
+            </div>
           </div>
 
-          <div>
-            <label className="label">ID Card Type</label>
-            <select
-              className="select"
-              value={form.idCardType}
-              onChange={(e) => setForm((p) => ({ ...p, idCardType: e.target.value }))}
-              required
-            >
-              {idCardTypes.map((type) => (
-                <option key={type} value={type}>
-                  {idCardTypeLabels[type] || type.replaceAll('_', ' ').toUpperCase()}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-slate-400 mt-1">Choose one: NIN, BVN, Passport, or Government Issued Valid ID Card.</p>
-          </div>
+          {isAdult && (
+            <>
+              <label className="flex items-start gap-2 text-sm text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={form.adultConsentAccepted}
+                  onChange={(e) => setForm((p) => ({ ...p, adultConsentAccepted: e.target.checked }))}
+                  className="mt-1"
+                  required
+                />
+                <span>
+                  I confirm I am 18 years or older and I consent to identity verification for platform safety.
+                </span>
+              </label>
 
-          <div>
-            <label className="label">ID Card Number</label>
-            <input
-              className="input"
-              value={form.idCardNumber}
-              onChange={(e) => setForm((p) => ({ ...p, idCardNumber: e.target.value }))}
-              required={cloudinaryConfigured}
-              placeholder="Enter your selected ID number"
-            />
-          </div>
+              <div>
+                <label className="label">ID Card Type</label>
+                <select
+                  className="select"
+                  value={form.idCardType}
+                  onChange={(e) => setForm((p) => ({ ...p, idCardType: e.target.value }))}
+                  required
+                >
+                  {idCardTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {idCardTypeLabels[type] || type.replaceAll('_', ' ').toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-400 mt-1">Choose one: NIN, BVN, Passport, or Government Issued Valid ID Card.</p>
+              </div>
+
+              <div>
+                <label className="label">ID Card Number</label>
+                <input
+                  className="input"
+                  value={form.idCardNumber}
+                  onChange={(e) => setForm((p) => ({ ...p, idCardNumber: e.target.value }))}
+                  required={cloudinaryConfigured}
+                  placeholder="Enter your selected ID number"
+                />
+              </div>
+            </>
+          )}
+
+          {age !== null && !isAdult && (
+            <label className="flex items-start gap-2 text-sm text-slate-200">
+              <input
+                type="checkbox"
+                checked={form.minorConsentAccepted}
+                onChange={(e) => setForm((p) => ({ ...p, minorConsentAccepted: e.target.checked }))}
+                className="mt-1"
+                required
+              />
+              <span>
+                I confirm I am below 18 years old and I (with guardian awareness where required) consent to minor account registration and platform safety checks.
+              </span>
+            </label>
+          )}
 
           <div>
             <label className="label">Profile Picture (optional)</label>
@@ -191,20 +292,22 @@ export default function Register() {
             <p className="text-xs text-slate-400 mt-1">Allowed formats: JPG, PNG, WEBP, GIF. Max size: 10MB.</p>
           </div>
 
-          <div>
-            <label className="label">Government ID Upload ({cloudinaryConfigured ? 'required' : 'optional'})</label>
-            <input
-              className="input"
-              type="file"
-              accept="image/*,.pdf"
-              onChange={(e) => setIdFile(e.target.files?.[0] || null)}
-              disabled={!cloudinaryConfigured}
-            />
-            <p className="text-xs text-slate-400 mt-1">Allowed formats: JPG, PNG, WEBP, PDF. Max size: 5MB.</p>
-            {!cloudinaryConfigured && (
-              <p className="text-xs text-amber-300 mt-1">Government ID upload is not configured yet (Cloudinary keys are placeholders). Account creation can still continue.</p>
-            )}
-          </div>
+          {isAdult && (
+            <div>
+              <label className="label">Government ID Upload ({cloudinaryConfigured ? 'required' : 'optional'})</label>
+              <input
+                className="input"
+                type="file"
+                accept="image/*,.pdf"
+                onChange={(e) => setIdFile(e.target.files?.[0] || null)}
+                disabled={!cloudinaryConfigured}
+              />
+              <p className="text-xs text-slate-400 mt-1">Allowed formats: JPG, PNG, WEBP, PDF. Max size: 5MB.</p>
+              {!cloudinaryConfigured && (
+                <p className="text-xs text-amber-300 mt-1">Government ID upload is temporarily unavailable. Account creation can still continue.</p>
+              )}
+            </div>
+          )}
 
           <button className="btn-primary w-full" disabled={loading} type="submit">
             {loading ? 'Creating account…' : 'Create Account'}

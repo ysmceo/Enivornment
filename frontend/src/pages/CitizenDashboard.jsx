@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { AlertTriangle, MapPin } from 'lucide-react'
+import { AlertTriangle, Copy, MapPin } from 'lucide-react'
 import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet'
 import { useAuth } from '../context/AuthContext'
 import { useLanguage } from '../context/LanguageContext'
@@ -9,6 +9,7 @@ import { authService } from '../services/authService'
 import { reportService } from '../services/reportService'
 import { platformService } from '../services/platformService'
 import { enqueueOfflineReport, getOfflineQueue, syncOfflineReports } from '../services/offlineReportQueue'
+import { useSocket } from '../hooks/useSocket'
 import Badge from '../components/Badge'
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
@@ -54,6 +55,9 @@ const WEATHER_CODE_LABELS = {
 
 const initialForm = {
   title: '',
+  reporterFullName: '',
+  reporterPhone: '',
+  reporterEmail: '',
   description: '',
   category: 'other',
   severity: 'medium',
@@ -65,6 +69,23 @@ const initialForm = {
   isAnonymous: false,
 }
 
+const EMAIL_REGEX = /^\S+@\S+\.\S+$/
+const PHONE_REGEX = /^\+?[\d\s\-()]{7,20}$/
+
+const REPORT_STATUS_LABELS = {
+  pending: 'Pending',
+  in_progress: 'In Progress',
+  under_review: 'Under Review',
+  investigating: 'Under Investigation',
+  verified: 'Verified',
+  solved: 'Solved',
+  resolved: 'Resolved',
+  rejected: 'Rejected',
+  closed: 'Closed',
+}
+
+const getStatusLabel = (status) => REPORT_STATUS_LABELS[status] || status || 'Unknown'
+
 const FORM_STEPS = [
   { id: 1, title: 'Incident Basics' },
   { id: 2, title: 'Location & Time' },
@@ -74,6 +95,7 @@ const FORM_STEPS = [
 
 export default function CitizenDashboard() {
   const { user, logout, refreshUser } = useAuth()
+  const { on } = useSocket()
   const { t } = useLanguage()
   const [meta, setMeta] = useState({ states: [], incidentCategories: [] })
   const [reports, setReports] = useState([])
@@ -95,7 +117,16 @@ export default function CitizenDashboard() {
   const [verificationFile, setVerificationFile] = useState(null)
   const [verificationSelfieFile, setVerificationSelfieFile] = useState(null)
   const [uploadingVerification, setUploadingVerification] = useState(false)
+  const [trackingCaseId, setTrackingCaseId] = useState('')
+  const [trackingEmail, setTrackingEmail] = useState('')
+  const [trackedCase, setTrackedCase] = useState(null)
+  const [trackingLoading, setTrackingLoading] = useState(false)
+  const [lastSubmittedCaseId, setLastSubmittedCaseId] = useState('')
+  const [copiedCaseCode, setCopiedCaseCode] = useState(false)
+  const [experienceDrafts, setExperienceDrafts] = useState({})
   const syncInProgressRef = useRef(false)
+
+  const completedStatuses = new Set(['solved', 'resolved', 'closed'])
 
   const previewLat = Number(form.lat)
   const previewLng = Number(form.lng)
@@ -119,6 +150,17 @@ export default function CitizenDashboard() {
     setMapReports(mapRes.data.reports || [])
     setMapSummary(summaryRes.data.summary || null)
   }
+
+  useEffect(() => {
+    if (!user) return
+    setForm((prev) => ({
+      ...prev,
+      reporterFullName: prev.reporterFullName || user.name || '',
+      reporterPhone: prev.reporterPhone || user.phone || '',
+      reporterEmail: prev.reporterEmail || user.email || '',
+    }))
+    setTrackingEmail((prev) => prev || user.email || '')
+  }, [user])
 
   useEffect(() => {
     const init = async () => {
@@ -145,6 +187,34 @@ export default function CitizenDashboard() {
     }
     init()
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    const offStatus = on('report-status-update', (payload) => {
+      if (payload?.message) {
+        toast.success(payload.message, { id: `status-${payload.reportId || payload.caseId || Date.now()}` })
+      }
+      fetchReports().catch(() => {})
+    })
+
+    const offNotification = on('notification', (payload) => {
+      if (payload?.type === 'report_status_update' && payload?.message) {
+        toast(payload.message, { id: `notif-${payload?.payload?.reportId || Date.now()}` })
+        fetchReports().catch(() => {})
+      }
+    })
+
+    return () => {
+      offStatus?.()
+      offNotification?.()
+    }
+  }, [on])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchReports().catch(() => {})
+    }, 30000)
+    return () => clearInterval(interval)
   }, [])
 
   useEffect(() => {
@@ -195,19 +265,34 @@ export default function CitizenDashboard() {
   }, [hasPreviewCoordinates, previewLat, previewLng])
 
   const statusCount = useMemo(() => {
-    const map = { pending: 0, under_review: 0, resolved: 0 }
+    const map = { pending: 0, in_progress: 0, solved: 0 }
     reports.forEach((r) => {
-      if (map[r.status] !== undefined) map[r.status] += 1
+      if (r.status === 'pending') {
+        map.pending += 1
+        return
+      }
+      if (['in_progress', 'under_review', 'investigating'].includes(r.status)) {
+        map.in_progress += 1
+        return
+      }
+      if (['solved', 'resolved', 'closed'].includes(r.status)) {
+        map.solved += 1
+      }
     })
     return map
   }, [reports])
 
   const canStartLiveStream = user?.role === 'user'
+  const isMinorAccount = user?.isAdult === false
+  const needsGovernmentIdForVerification = !isMinorAccount
   const hasGovernmentIdForVerification = Boolean(user?.hasGovernmentId)
   const hasSelfieForVerification = Boolean(user?.hasVerificationSelfie)
-  const verificationProgressPercent =
-    (hasGovernmentIdForVerification ? 50 : 0) + (hasSelfieForVerification ? 50 : 0)
-  const hasSubmittedBothVerificationItems = hasGovernmentIdForVerification && hasSelfieForVerification
+  const verificationProgressPercent = needsGovernmentIdForVerification
+    ? (hasGovernmentIdForVerification ? 50 : 0) + (hasSelfieForVerification ? 50 : 0)
+    : (hasSelfieForVerification ? 100 : 0)
+  const hasSubmittedVerificationItems = needsGovernmentIdForVerification
+    ? hasGovernmentIdForVerification && hasSelfieForVerification
+    : hasSelfieForVerification
   const liveStreamRestriction = useMemo(() => {
     if (canStartLiveStream) return ''
     if (user?.role !== 'user') {
@@ -353,6 +438,22 @@ export default function CitizenDashboard() {
         toast.error('Please enter a report title')
         return false
       }
+
+      if (!String(form.reporterFullName || '').trim()) {
+        toast.error('Please enter your full name')
+        return false
+      }
+
+      if (!PHONE_REGEX.test(String(form.reporterPhone || '').trim())) {
+        toast.error('Please enter a valid phone number')
+        return false
+      }
+
+      if (!EMAIL_REGEX.test(String(form.reporterEmail || '').trim())) {
+        toast.error('Please enter a valid email address')
+        return false
+      }
+
       return true
     }
 
@@ -461,6 +562,9 @@ export default function CitizenDashboard() {
       setSubmitting(true)
       const payload = new FormData()
       payload.append('title', form.title)
+      payload.append('reporter.fullName', form.reporterFullName)
+      payload.append('reporter.phone', form.reporterPhone)
+      payload.append('reporter.email', form.reporterEmail)
       payload.append('description', form.description)
       payload.append('category', form.category)
       payload.append('severity', form.severity)
@@ -472,10 +576,22 @@ export default function CitizenDashboard() {
       payload.append('isAnonymous', String(form.isAnonymous))
       files.forEach((file) => payload.append('media', file))
 
-      await reportService.createReport(payload)
-      toast.success('Report submitted — awaiting admin approval.')
+      const response = await reportService.createReport(payload)
+      const createdCaseId = response?.data?.caseId || response?.data?.report?.caseId
+      setLastSubmittedCaseId(createdCaseId || '')
+      toast.success(
+        createdCaseId
+          ? `Report submitted — Case ID ${createdCaseId}. Awaiting admin approval.`
+          : 'Report submitted — awaiting admin approval.'
+      )
 
-      setForm((prev) => ({ ...initialForm, state: prev.state }))
+      setForm((prev) => ({
+        ...initialForm,
+        state: prev.state,
+        reporterFullName: prev.reporterFullName,
+        reporterPhone: prev.reporterPhone,
+        reporterEmail: prev.reporterEmail,
+      }))
       setFormStep(1)
       setFiles([])
       await fetchReports()
@@ -489,6 +605,9 @@ export default function CitizenDashboard() {
 
         const queueSize = enqueueOfflineReport({
           title: form.title,
+          'reporter.fullName': form.reporterFullName,
+          'reporter.phone': form.reporterPhone,
+          'reporter.email': form.reporterEmail,
           description: form.description,
           category: form.category,
           severity: form.severity,
@@ -507,6 +626,98 @@ export default function CitizenDashboard() {
       }
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleTrackCase = async () => {
+    const normalizedCaseId = String(trackingCaseId || '').trim().toUpperCase()
+    const normalizedEmail = String(trackingEmail || '').trim().toLowerCase()
+    if (!normalizedCaseId) {
+      toast.error('Enter a case ID to track')
+      return
+    }
+    if (!normalizedEmail) {
+      toast.error('Enter the email used during report submission')
+      return
+    }
+
+    try {
+      setTrackingLoading(true)
+      const { data } = await reportService.trackCaseWithEmail({
+        caseId: normalizedCaseId,
+        email: normalizedEmail,
+      })
+      setTrackedCase(data?.report || null)
+      toast.success(`Tracking loaded for ${normalizedCaseId}`)
+    } catch (err) {
+      setTrackedCase(null)
+      toast.error(err.response?.data?.message || 'Unable to find that case ID')
+    } finally {
+      setTrackingLoading(false)
+    }
+  }
+
+  const copyCaseCode = async () => {
+    if (!lastSubmittedCaseId) return
+
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(lastSubmittedCaseId)
+      } else {
+        const tempInput = document.createElement('textarea')
+        tempInput.value = lastSubmittedCaseId
+        tempInput.style.position = 'fixed'
+        tempInput.style.opacity = '0'
+        document.body.appendChild(tempInput)
+        tempInput.focus()
+        tempInput.select()
+        document.execCommand('copy')
+        document.body.removeChild(tempInput)
+      }
+
+      setCopiedCaseCode(true)
+      setTimeout(() => setCopiedCaseCode(false), 1500)
+      toast.success('Case code copied to clipboard')
+    } catch {
+      toast.error('Unable to copy case code automatically')
+    }
+  }
+
+  const setExperienceField = (reportId, field, value) => {
+    setExperienceDrafts((prev) => ({
+      ...prev,
+      [reportId]: {
+        rating: prev[reportId]?.rating || '5',
+        journey: prev[reportId]?.journey || '',
+        submitting: false,
+        ...prev[reportId],
+        [field]: value,
+      },
+    }))
+  }
+
+  const submitExperience = async (report) => {
+    const draft = experienceDrafts[report._id] || { rating: '5', journey: '' }
+    const rating = Number(draft.rating)
+    const journey = String(draft.journey || '').trim()
+
+    if (!journey || journey.length < 10) {
+      toast.error('Please share at least a short case journey (10+ characters).')
+      return
+    }
+
+    try {
+      setExperienceField(report._id, 'submitting', true)
+      await reportService.submitExperience(report._id, { rating, journey })
+      toast.success('Thank you for sharing your case journey.')
+      await fetchReports()
+      setExperienceDrafts((prev) => ({
+        ...prev,
+        [report._id]: { rating: '5', journey: '', submitting: false },
+      }))
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to submit case experience')
+      setExperienceField(report._id, 'submitting', false)
     }
   }
 
@@ -570,7 +781,7 @@ export default function CitizenDashboard() {
         <div>
           <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-700 via-violet-700 to-sky-700 dark:from-indigo-300 dark:via-violet-300 dark:to-sky-300 bg-clip-text text-transparent">Citizen Safety Dashboard</h1>
           <p className="text-sm text-slate-600 dark:text-slate-300">
-            Welcome, {user?.name}. Route incidents by state and upload evidence securely.
+            Welcome, {user?.name}. Submit and track incidents by state with secure evidence handling.
           </p>
         </div>
         <div className="flex gap-2">
@@ -594,7 +805,10 @@ export default function CitizenDashboard() {
         <section className="card p-4 space-y-3 border border-amber-300/70 dark:border-amber-700/60 bg-amber-50/60 dark:bg-amber-900/20">
           <h3 className="font-semibold text-amber-800 dark:text-amber-300">Identity verification (recommended)</h3>
           <p className="text-sm text-slate-700 dark:text-slate-300">
-            Uploading a government ID + selfie helps admins validate submissions faster, but you can already upload pictures/videos, submit reports, and start live video as a user.
+            {needsGovernmentIdForVerification
+              ? 'Uploading a government ID and selfie helps administrators validate submissions faster.'
+              : 'For minor accounts, uploading a verification selfie helps administrators validate submissions faster without government ID upload.'}
+            {' '}You can still upload evidence, submit reports, and start live video as a user.
             Current status: <span className="font-semibold capitalize">{user?.idVerificationStatus || 'none'}</span>
             <span className="ml-2 inline-flex items-center rounded-full border border-indigo-300 dark:border-indigo-700 bg-indigo-100 dark:bg-indigo-900/30 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 dark:text-indigo-300">
               {verificationProgressPercent}% complete
@@ -604,23 +818,27 @@ export default function CitizenDashboard() {
           <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 bg-white/70 dark:bg-slate-900/40">
             <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">Verification progress</p>
             <div className="flex flex-wrap gap-2">
-              <span className={`text-xs px-2.5 py-1 rounded-full border ${hasGovernmentIdForVerification ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700' : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'}`}>
-                {hasGovernmentIdForVerification ? '✅ Government ID uploaded' : '⏳ Government ID pending'}
-              </span>
+              {needsGovernmentIdForVerification && (
+                <span className={`text-xs px-2.5 py-1 rounded-full border ${hasGovernmentIdForVerification ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700' : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'}`}>
+                  {hasGovernmentIdForVerification ? '✅ Government ID uploaded' : '⏳ Government ID pending'}
+                </span>
+              )}
               <span className={`text-xs px-2.5 py-1 rounded-full border ${hasSelfieForVerification ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700' : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'}`}>
                 {hasSelfieForVerification ? '✅ Selfie uploaded' : '⏳ Selfie pending'}
               </span>
               <span className={`text-xs px-2.5 py-1 rounded-full border ${user?.idVerificationStatus === 'pending' ? 'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-700' : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'}`}>
-                {hasSubmittedBothVerificationItems
-                  ? '✅ Both done — waiting on admin approval'
-                  : '⏳ Waiting for both uploads'}
+                {hasSubmittedVerificationItems
+                  ? '✅ Verification submitted — awaiting admin approval'
+                  : needsGovernmentIdForVerification
+                    ? '⏳ Awaiting both uploads'
+                    : '⏳ Awaiting selfie upload'}
               </span>
             </div>
 
-            {hasSubmittedBothVerificationItems && user?.idVerificationStatus === 'pending' && (
+            {hasSubmittedVerificationItems && user?.idVerificationStatus === 'pending' && (
               <div className="mt-3 rounded-lg border border-emerald-300/80 dark:border-emerald-700/70 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2">
                 <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
-                  ✅ Both done — waiting on admin approval.
+                  ✅ Verification submitted — awaiting admin approval.
                 </p>
               </div>
             )}
@@ -632,29 +850,35 @@ export default function CitizenDashboard() {
             )}
           </div>
 
-          <form onSubmit={uploadVerificationId} className="grid md:grid-cols-4 gap-3 items-end">
-            <div>
-              <label className="label">ID card number</label>
-              <input
-                className="input"
-                value={verificationIdNumber}
-                onChange={(e) => setVerificationIdNumber(e.target.value)}
-                placeholder="Enter your ID number"
-              />
-            </div>
-            <div>
-              <label className="label">Government ID file</label>
-              <input
-                className="input"
-                type="file"
-                accept="image/*,.pdf"
-                onChange={(e) => setVerificationFile(e.target.files?.[0] || null)}
-              />
-            </div>
-            <button type="submit" className="btn-primary" disabled={uploadingVerification}>
-              {uploadingVerification ? 'Uploading…' : 'Upload Government ID'}
-            </button>
-          </form>
+          {needsGovernmentIdForVerification ? (
+            <form onSubmit={uploadVerificationId} className="grid md:grid-cols-4 gap-3 items-end">
+              <div>
+                <label className="label">ID card number</label>
+                <input
+                  className="input"
+                  value={verificationIdNumber}
+                  onChange={(e) => setVerificationIdNumber(e.target.value)}
+                  placeholder="Enter your ID number"
+                />
+              </div>
+              <div>
+                <label className="label">Government ID file</label>
+                <input
+                  className="input"
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={(e) => setVerificationFile(e.target.files?.[0] || null)}
+                />
+              </div>
+              <button type="submit" className="btn-primary" disabled={uploadingVerification}>
+                {uploadingVerification ? 'Uploading…' : 'Upload Government ID'}
+              </button>
+            </form>
+          ) : (
+            <p className="text-xs text-slate-600 dark:text-slate-300">
+              Minor account: government ID upload is not required. Please upload a verification selfie below.
+            </p>
+          )}
 
           <form onSubmit={uploadVerificationSelfie} className="grid md:grid-cols-3 gap-3 items-end">
             <div className="md:col-span-2">
@@ -687,8 +911,12 @@ export default function CitizenDashboard() {
               <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{statusCount.pending}</p>
             </div>
             <div className="card p-4 border-l-4 border-emerald-500 bg-gradient-to-br from-emerald-500/10 to-transparent">
-              <p className="text-sm text-slate-500">Resolved</p>
-              <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{statusCount.resolved}</p>
+              <p className="text-sm text-slate-500">In Progress</p>
+              <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{statusCount.in_progress}</p>
+            </div>
+            <div className="card p-4 border-l-4 border-emerald-500 bg-gradient-to-br from-emerald-500/10 to-transparent">
+              <p className="text-sm text-slate-500">Solved</p>
+              <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{statusCount.solved}</p>
             </div>
           </section>
 
@@ -823,6 +1051,40 @@ export default function CitizenDashboard() {
                       </select>
                     </div>
                   </div>
+
+                  <div className="grid sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="label">Full Name</label>
+                      <input
+                        className="input"
+                        value={form.reporterFullName}
+                        onChange={(e) => setField('reporterFullName', e.target.value)}
+                        placeholder="Your full name"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Phone Number</label>
+                      <input
+                        className="input"
+                        value={form.reporterPhone}
+                        onChange={(e) => setField('reporterPhone', e.target.value)}
+                        placeholder="e.g. +2348012345678"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Email Address</label>
+                      <input
+                        className="input"
+                        type="email"
+                        value={form.reporterEmail}
+                        onChange={(e) => setField('reporterEmail', e.target.value)}
+                        placeholder="you@example.com"
+                        required
+                      />
+                    </div>
+                  </div>
                 </>
               )}
 
@@ -924,6 +1186,9 @@ export default function CitizenDashboard() {
                 <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 bg-white/70 dark:bg-slate-900/30 space-y-2 text-sm">
                   <p><span className="font-semibold">Title:</span> {form.title || 'N/A'}</p>
                   <p><span className="font-semibold">Category:</span> {form.category}</p>
+                  <p><span className="font-semibold">Reporter:</span> {form.reporterFullName}</p>
+                  <p><span className="font-semibold">Phone:</span> {form.reporterPhone}</p>
+                  <p><span className="font-semibold">Email:</span> {form.reporterEmail}</p>
                   <p><span className="font-semibold">State:</span> {form.state}</p>
                   <p><span className="font-semibold">Severity:</span> {form.severity}</p>
                   <p><span className="font-semibold">Incident Date:</span> {form.incidentDate ? new Date(form.incidentDate).toLocaleString() : 'N/A'}</p>
@@ -937,7 +1202,7 @@ export default function CitizenDashboard() {
 
               <div className="flex items-center justify-between gap-2 pt-2">
                 <button type="button" onClick={goToPrevStep} className="btn-secondary" disabled={formStep === 1 || submitting}>
-                  Prev
+                  Previous
                 </button>
 
                 {formStep < FORM_STEPS.length ? (
@@ -950,6 +1215,20 @@ export default function CitizenDashboard() {
                   </button>
                 )}
               </div>
+
+              {lastSubmittedCaseId && (
+                <div className="rounded-xl border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 p-3.5">
+                  <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                    Case submitted successfully: {lastSubmittedCaseId}
+                  </p>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
+                    Save this case code. You can track progress using this code and your email.
+                  </p>
+                  <button type="button" className="btn-secondary mt-2" onClick={copyCaseCode}>
+                    <Copy className="w-4 h-4" /> {copiedCaseCode ? 'Copied!' : 'Copy Case Code'}
+                  </button>
+                </div>
+              )}
             </form>
 
             <aside className="space-y-4">
@@ -977,20 +1256,72 @@ export default function CitizenDashboard() {
             <p className="text-sm text-slate-500 mb-3">
               New reports stay in pending review until an admin approves and processes them.
             </p>
+
+            <div className="mb-4 rounded-xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50/70 dark:bg-slate-900/40">
+              <p className="text-sm font-semibold mb-2">Track a Case by ID</p>
+              <div className="flex flex-wrap gap-2">
+                <input
+                  className="input flex-1 min-w-[220px]"
+                  placeholder="CASE-YYYYMMDD-XXXXXXXX"
+                  value={trackingCaseId}
+                  onChange={(e) => setTrackingCaseId(e.target.value)}
+                />
+                <input
+                  className="input flex-1 min-w-[220px]"
+                  type="email"
+                  placeholder="Email used to submit"
+                  value={trackingEmail}
+                  onChange={(e) => setTrackingEmail(e.target.value)}
+                />
+                <button type="button" className="btn-secondary" onClick={handleTrackCase} disabled={trackingLoading}>
+                  {trackingLoading ? 'Tracking…' : 'Track Case'}
+                </button>
+              </div>
+
+              {trackedCase && (
+                <div className="mt-3 rounded-lg border border-emerald-200 dark:border-emerald-800 p-3 bg-emerald-50/60 dark:bg-emerald-900/20">
+                  <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                    {trackedCase.caseId} • {getStatusLabel(trackedCase.status)}
+                  </p>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
+                    Last updated: {trackedCase.updatedAt ? new Date(trackedCase.updatedAt).toLocaleString() : 'N/A'}
+                  </p>
+                </div>
+              )}
+            </div>
+
             <div className="space-y-3">
               {reports.length === 0 ? (
-                <p className="text-sm text-slate-500">No reports yet.</p>
+                  <p className="text-sm text-slate-500">No reports submitted yet.</p>
               ) : (
                 reports.map((report) => (
                   <div key={report._id} className="border border-slate-200 dark:border-slate-700 rounded-xl p-3.5">
                     <div className="flex flex-wrap items-center gap-2 justify-between">
                       <p className="font-semibold">{report.title}</p>
-                      <Badge status={report.status} />
+                      <Badge status={report.status} label={getStatusLabel(report.status)} />
                     </div>
+                    <p className="text-xs text-indigo-700 dark:text-indigo-300 mt-1 font-semibold">
+                      Case ID: {report.caseId || 'Not assigned'}
+                    </p>
                     <p className="text-sm text-slate-500 mt-1">{report.state} · {report.category}</p>
                     <p className="text-xs text-slate-500 mt-1">
                       Incident: {report.incidentDate ? new Date(report.incidentDate).toLocaleString() : 'N/A'}
                     </p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Submitted: {report.createdAt ? new Date(report.createdAt).toLocaleString() : 'N/A'}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Last Updated: {report.updatedAt ? new Date(report.updatedAt).toLocaleString() : 'N/A'}
+                    </p>
+                    {Array.isArray(report.statusHistory) && report.statusHistory.length > 0 && (
+                      <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
+                        Latest update: {report.statusHistory[report.statusHistory.length - 1]?.note || 'Status updated'}
+                        {' · '}
+                        {report.statusHistory[report.statusHistory.length - 1]?.changedAt
+                          ? new Date(report.statusHistory[report.statusHistory.length - 1].changedAt).toLocaleString()
+                          : 'N/A'}
+                      </p>
+                    )}
                     {report.status === 'pending' && (
                       <div className="mt-1 flex flex-wrap items-center gap-2">
                         <span className="inline-flex items-center rounded-full border border-amber-300 dark:border-amber-700 bg-amber-100 dark:bg-amber-900/30 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800 dark:text-amber-300">
@@ -999,6 +1330,54 @@ export default function CitizenDashboard() {
                         <p className="text-xs text-indigo-700 dark:text-indigo-300 font-medium">
                           Report submitted — awaiting admin approval.
                         </p>
+                      </div>
+                    )}
+                    {completedStatuses.has(report.status) && (
+                      <div className="mt-3 rounded-lg border border-indigo-200 dark:border-indigo-800 p-3 bg-indigo-50/60 dark:bg-indigo-900/20 space-y-2">
+                        <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">
+                          Case completed by admin — share your experience journey
+                        </p>
+
+                        {report.experience?.submittedAt ? (
+                          <div className="text-xs text-slate-600 dark:text-slate-300 space-y-1">
+                            <p><span className="font-semibold">Rating:</span> {report.experience.rating || 'N/A'}/5</p>
+                            <p><span className="font-semibold">Journey:</span> {report.experience.journey || 'No feedback provided.'}</p>
+                            <p><span className="font-semibold">Submitted:</span> {new Date(report.experience.submittedAt).toLocaleString()}</p>
+                          </div>
+                        ) : (
+                          <>
+                            <div>
+                              <label className="label">How would you rate this case journey?</label>
+                              <select
+                                className="select"
+                                value={experienceDrafts[report._id]?.rating || '5'}
+                                onChange={(e) => setExperienceField(report._id, 'rating', e.target.value)}
+                              >
+                                {[5, 4, 3, 2, 1].map((val) => (
+                                  <option key={val} value={val}>{val} / 5</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="label">Tell us about your journey</label>
+                              <textarea
+                                className="textarea"
+                                rows={3}
+                                value={experienceDrafts[report._id]?.journey || ''}
+                                onChange={(e) => setExperienceField(report._id, 'journey', e.target.value)}
+                                placeholder="Share how the process went, response speed, and suggestions..."
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              className="btn-secondary"
+                              onClick={() => submitExperience(report)}
+                              disabled={Boolean(experienceDrafts[report._id]?.submitting)}
+                            >
+                              {experienceDrafts[report._id]?.submitting ? 'Submitting…' : 'Submit Experience'}
+                            </button>
+                          </>
+                        )}
                       </div>
                     )}
                     {report.moderation?.flagged && (

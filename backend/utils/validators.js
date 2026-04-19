@@ -7,6 +7,19 @@ const {
   EMERGENCY_TYPES,
 } = require('./nigeria');
 
+const getAgeFromDate = (dateInput) => {
+  const dob = new Date(dateInput);
+  if (Number.isNaN(dob.getTime())) return null;
+
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const monthDiff = today.getMonth() - dob.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+    age -= 1;
+  }
+  return age;
+};
+
 // ─── Auth validations ──────────────────────────────────────────────────────
 
 const registerValidation = [
@@ -35,9 +48,62 @@ const registerValidation = [
     .notEmpty().withMessage('State is required')
     .isIn(NIGERIA_STATES).withMessage('Invalid Nigerian state'),
 
+  body('dateOfBirth')
+    .notEmpty().withMessage('Date of birth is required')
+    .isISO8601().withMessage('Date of birth must be a valid date')
+    .custom((value) => {
+      const dob = new Date(value);
+      if (Number.isNaN(dob.getTime())) {
+        throw new Error('Date of birth must be a valid date');
+      }
+      if (dob > new Date()) {
+        throw new Error('Date of birth cannot be in the future');
+      }
+      return true;
+    }),
+
+  body('adultConsentAccepted')
+    .optional({ nullable: true })
+    .isBoolean().withMessage('adultConsentAccepted must be true or false'),
+
+  body('minorConsentAccepted')
+    .optional({ nullable: true })
+    .isBoolean().withMessage('minorConsentAccepted must be true or false'),
+
   body('idCardType')
-    .notEmpty().withMessage('ID card type is required')
-    .isIn(ID_CARD_TYPES).withMessage('Invalid ID card type'),
+    .custom((value, { req }) => {
+      const age = getAgeFromDate(req.body?.dateOfBirth);
+      if (age === null) {
+        throw new Error('Date of birth must be a valid date');
+      }
+
+      const isAdult = age >= 18;
+      const normalizedValue = String(value || '').trim();
+
+      if (isAdult && !normalizedValue) {
+        throw new Error('ID card type is required for users aged 18 and above');
+      }
+
+      if (normalizedValue && !ID_CARD_TYPES.includes(normalizedValue)) {
+        throw new Error('Invalid ID card type');
+      }
+
+      if (isAdult) {
+        const consent = req.body?.adultConsentAccepted;
+        const accepted = consent === true || consent === 'true' || consent === '1' || consent === 1;
+        if (!accepted) {
+          throw new Error('Users aged 18 and above must accept consent before registration');
+        }
+      } else {
+        const consent = req.body?.minorConsentAccepted;
+        const accepted = consent === true || consent === 'true' || consent === '1' || consent === 1;
+        if (!accepted) {
+          throw new Error('Users below 18 must accept minor consent before registration');
+        }
+      }
+
+      return true;
+    }),
 ];
 
 const loginValidation = [
@@ -95,6 +161,22 @@ const reportValidation = [
     .notEmpty().withMessage('State is required')
     .isIn(NIGERIA_STATES).withMessage('Invalid Nigerian state'),
 
+  body(['reporter.fullName', 'reporterFullName'])
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
+    .isLength({ min: 2, max: 120 }).withMessage('Full name must be between 2 and 120 characters'),
+
+  body(['reporter.phone', 'reporterPhone'])
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
+    .matches(/^\+?[\d\s\-()]{7,20}$/).withMessage('Invalid phone number'),
+
+  body(['reporter.email', 'reporterEmail'])
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
+    .isEmail().withMessage('Invalid email address')
+    .normalizeEmail(),
+
   body('location.coordinates.lng')
     .optional()
     .isFloat({ min: -180, max: 180 }).withMessage('Invalid longitude'),
@@ -110,9 +192,38 @@ const statusUpdateValidation = [
   param('id').isMongoId().withMessage('Invalid report ID'),
   body('status')
     .notEmpty().withMessage('Status is required')
-    .isIn(['pending','under_review','investigating','resolved','rejected','closed'])
+    .isIn(['pending','in_progress','under_review','investigating','verified','solved','resolved','rejected','closed'])
     .withMessage('Invalid status value'),
   body('adminNotes').optional().isLength({ max: 2000 }),
+];
+
+const caseIdParamValidation = (paramName = 'caseId') => [
+  param(paramName)
+    .trim()
+    .matches(/^CASE-\d{8}-[A-Z0-9]{8}$/)
+    .withMessage('Invalid case ID format'),
+];
+
+const trackCaseByEmailValidation = [
+  body('caseId')
+    .trim()
+    .matches(/^CASE-\d{8}-[A-Z0-9]{8}$/)
+    .withMessage('Invalid case ID format'),
+  body('email')
+    .trim()
+    .notEmpty().withMessage('Email is required')
+    .isEmail().withMessage('Invalid email address')
+    .normalizeEmail(),
+];
+
+const reportExperienceValidation = [
+  body('rating')
+    .notEmpty().withMessage('Rating is required')
+    .isInt({ min: 1, max: 5 }).withMessage('Rating must be between 1 and 5'),
+  body('journey')
+    .trim()
+    .notEmpty().withMessage('Please share your experience journey')
+    .isLength({ min: 10, max: 3000 }).withMessage('Journey feedback must be between 10 and 3000 characters'),
 ];
 
 const verifyGovernmentIdValidation = [
@@ -164,5 +275,8 @@ module.exports = {
   statusUpdateValidation,
   verifyGovernmentIdValidation,
   mongoIdParamValidation,
+  caseIdParamValidation,
+  trackCaseByEmailValidation,
+  reportExperienceValidation,
   emergencyContactValidation,
 };

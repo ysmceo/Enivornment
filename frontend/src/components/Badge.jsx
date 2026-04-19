@@ -1,8 +1,13 @@
 const STATUS_STYLES = {
   pending: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800/50',
+  in_progress: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-400 border-sky-200 dark:border-sky-800/50',
   'under review': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800/50',
+  under_review: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800/50',
+  investigating: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800/50',
+  'under investigation': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800/50',
   approved: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50',
   rejected: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800/50',
+  solved: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50',
   resolved: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50',
   verified: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50',
   unverified: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800/50',
@@ -14,13 +19,21 @@ const STATUS_STYLES = {
   unconfigured: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800/50',
   degraded: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800/50',
   fallback: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800/50',
+  adult: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50',
+  minor: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300 border-violet-200 dark:border-violet-800/50',
+  unknown: 'bg-slate-100 text-slate-700 dark:bg-slate-700/50 dark:text-slate-300 border-slate-200 dark:border-slate-600',
 }
 
 const DOT_STYLES = {
   pending: 'bg-amber-500',
+  in_progress: 'bg-sky-500',
   'under review': 'bg-blue-500',
+  under_review: 'bg-blue-500',
+  investigating: 'bg-indigo-500',
+  'under investigation': 'bg-indigo-500',
   approved: 'bg-emerald-500',
   rejected: 'bg-red-500',
+  solved: 'bg-emerald-500',
   resolved: 'bg-emerald-500',
   verified: 'bg-emerald-500',
   unverified: 'bg-amber-500',
@@ -30,6 +43,9 @@ const DOT_STYLES = {
   unconfigured: 'bg-red-500',
   degraded: 'bg-amber-500',
   fallback: 'bg-blue-500',
+  adult: 'bg-emerald-500',
+  minor: 'bg-violet-500',
+  unknown: 'bg-slate-400',
 }
 
 export default function Badge({ status, label, dot = false, size = 'sm' }) {

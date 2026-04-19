@@ -85,12 +85,40 @@ const validateIdNumberByType = (idCardType, idCardNumber) => {
   return { ok: true, sanitized: value };
 };
 
+const getAgeFromDate = (dateInput) => {
+  const dob = new Date(dateInput);
+  if (Number.isNaN(dob.getTime())) return null;
+
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const monthDiff = today.getMonth() - dob.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+    age -= 1;
+  }
+
+  return age;
+};
+
+const toBoolean = (value) => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  const normalized = String(value || '').trim().toLowerCase();
+  return ['true', '1', 'yes', 'on'].includes(normalized);
+};
+
 const computePendingVerificationStatus = (userDocLike) => {
   const hasGovernmentId = Boolean(userDocLike?.governmentIdUrl);
   const hasSelfie = Boolean(userDocLike?.selfieUrl);
+  const isAdult = userDocLike?.isAdult !== false;
 
-  // Verification can only move to pending review after both artifacts are present
-  if (hasGovernmentId && hasSelfie) return 'pending';
+  // Adults: require both government ID and selfie.
+  // Minors: require selfie only (no government ID upload required).
+  if (isAdult) {
+    if (hasGovernmentId && hasSelfie) return 'pending';
+  } else if (hasSelfie) {
+    return 'pending';
+  }
+
   return 'none';
 };
 
@@ -180,7 +208,40 @@ const register = async (req, res) => {
       });
     }
 
-    const { name, email, password, phone, state, idCardType } = req.body;
+    const {
+      name,
+      email,
+      password,
+      phone,
+      state,
+      idCardType,
+      dateOfBirth,
+      adultConsentAccepted,
+      minorConsentAccepted,
+    } = req.body;
+
+    const age = getAgeFromDate(dateOfBirth);
+    if (age === null) {
+      return res.status(400).json({ success: false, message: 'Date of birth is required and must be valid.' });
+    }
+
+    const isAdult = age >= 18;
+    const adultConsent = toBoolean(adultConsentAccepted);
+    const minorConsent = toBoolean(minorConsentAccepted);
+
+    if (isAdult && !adultConsent) {
+      return res.status(400).json({
+        success: false,
+        message: 'Users aged 18 and above must accept consent before registration.',
+      });
+    }
+
+    if (!isAdult && !minorConsent) {
+      return res.status(400).json({
+        success: false,
+        message: 'Users below 18 must accept minor consent before registration.',
+      });
+    }
 
     // Check for duplicate email
     const existing = await User.findOne({ email });
@@ -194,7 +255,11 @@ const register = async (req, res) => {
       password,
       phone,
       state: state || 'FCT',
-      idCardType,
+      dateOfBirth: new Date(dateOfBirth),
+      isAdult,
+      adultConsentAccepted: isAdult ? true : false,
+      minorConsentAccepted: !isAdult ? true : false,
+      idCardType: isAdult ? idCardType : null,
     });
 
     await recordAuditLog({
@@ -204,7 +269,13 @@ const register = async (req, res) => {
       action: 'user_registered',
       entityType: 'user',
       entityId: user._id,
-      metadata: { state: user.state, idCardType: user.idCardType },
+      metadata: {
+        state: user.state,
+        idCardType: user.idCardType,
+        isAdult: user.isAdult,
+        adultConsentAccepted: user.adultConsentAccepted,
+        minorConsentAccepted: user.minorConsentAccepted,
+      },
     });
 
     sendTokenResponse(user, 201, res);
@@ -493,6 +564,13 @@ const uploadGovernmentId = async (req, res) => {
 
     // Delete old ID from Cloudinary if exists
     const existingUser = await User.findById(req.user._id);
+    if (existingUser?.isAdult === false) {
+      return res.status(400).json({
+        success: false,
+        message: 'Government ID upload is only required for adult accounts.',
+      });
+    }
+
     const idNumberCheck = validateIdNumberByType(existingUser?.idCardType, idCardNumber);
     if (!idNumberCheck.ok) {
       return res.status(400).json({ success: false, message: idNumberCheck.message });
@@ -509,6 +587,7 @@ const uploadGovernmentId = async (req, res) => {
     const nextStatus = computePendingVerificationStatus({
       governmentIdUrl: encryptedUrl,
       selfieUrl: existingUser?.selfieUrl,
+      isAdult: existingUser?.isAdult,
     });
 
     let user = await User.findByIdAndUpdate(
@@ -597,6 +676,7 @@ const uploadVerificationSelfie = async (req, res) => {
     const nextStatus = computePendingVerificationStatus({
       governmentIdUrl: existingUser?.governmentIdUrl,
       selfieUrl: encryptedSelfieUrl,
+      isAdult: existingUser?.isAdult,
     });
 
     let user = await User.findByIdAndUpdate(
