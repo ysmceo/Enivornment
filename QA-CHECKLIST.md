@@ -3,6 +3,7 @@
 Last updated: 2026-04-19
 
 Use this checklist to verify the end-to-end case evidence flow where:
+
 - users submit multiple photos/videos,
 - admins request additional evidence,
 - users upload more evidence to the same case.
@@ -10,6 +11,7 @@ Use this checklist to verify the end-to-end case evidence flow where:
 ## Scope
 
 This checklist covers:
+
 - Initial multi-file report evidence upload
 - Admin evidence request workflow
 - User additional evidence response workflow
@@ -35,6 +37,7 @@ This checklist covers:
 5. Submit report.
 
 Expected:
+
 - Report is created successfully.
 - Case ID is shown.
 - New report appears in “My Submitted Reports”.
@@ -52,6 +55,7 @@ Expected:
 5. Click **Request Additional Evidence**.
 
 Expected:
+
 - Success message appears.
 - No modal crash.
 - Request note is saved for that report.
@@ -69,6 +73,7 @@ Expected:
 7. Click **Upload Additional Evidence**.
 
 Expected:
+
 - Success message appears.
 - Additional evidence is accepted and attached to the same report.
 - No page crash or form corruption.
@@ -78,33 +83,45 @@ Expected:
 ## D) Validation checks
 
 ### D1. User submits additional evidence with no files
+
 Steps:
+
 - In additional evidence section, click upload without selecting files.
 
 Expected:
+
 - Validation message appears.
 - No request is processed.
 
 ### D2. Admin sends empty evidence request
+
 Steps:
+
 - In admin modal, click request evidence with empty note.
 
 Expected:
+
 - Validation message appears.
 - No request is processed.
 
 ### D3. Unsupported file type
+
 Steps:
+
 - Attempt to upload unsupported file extension/type.
 
 Expected:
+
 - Upload rejected with clear error.
 
 ### D4. File size exceeds limit
+
 Steps:
+
 - Attempt to upload a file larger than configured limit.
 
 Expected:
+
 - Upload rejected with file-size error.
 
 ---
