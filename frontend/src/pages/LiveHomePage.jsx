@@ -3,13 +3,19 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Video, Radio, Clock, Shield } from 'lucide-react'
 import { streamService } from '../services/reportService'
 import { format } from 'date-fns'
+import { useAuth } from '../context/AuthContext'
 
 export default function LiveHomePage() {
+  const { user } = useAuth()
   const navigate = useNavigate()
   const [streams, setStreams] = useState([])
   const [loading, setLoading] = useState(true)
   const [joiningLatest, setJoiningLatest] = useState(false)
+  const [joiningPremium, setJoiningPremium] = useState(false)
   const [joinError, setJoinError] = useState('')
+
+  const premiumCode = String(import.meta.env.VITE_PREMIUM_STREAM_CODE || '2026').trim()
+  const canAccessPremiumLive = user?.role === 'admin' || user?.premiumPlanActive === true || user?.premiumPlanStatus === 'active'
 
   useEffect(() => {
     streamService.getActiveStreams()
@@ -34,6 +40,37 @@ export default function LiveHomePage() {
 
     setJoiningLatest(true)
     navigate(`/live/${encodeURIComponent(latestStreamId)}`)
+  }
+
+  const handleJoinPremiumLatest = async () => {
+    if (!canAccessPremiumLive) {
+      setJoinError('Premium live streams are available to active premium-plan members only.')
+      return
+    }
+
+    setJoiningPremium(true)
+    setJoinError('')
+
+    try {
+      const { data } = await streamService.getActiveStreams({
+        accessLevel: 'premium',
+        accessCode: premiumCode,
+      })
+
+      const latest = Array.isArray(data?.streams) && data.streams.length > 0 ? data.streams[0] : null
+      const latestStreamId = latest?.streamId || latest?.roomId || ''
+
+      if (!latestStreamId) {
+        setJoinError('No premium private stream is active right now.')
+        return
+      }
+
+      navigate(`/live/${encodeURIComponent(latestStreamId)}?code=${encodeURIComponent(premiumCode)}`)
+    } catch (err) {
+      setJoinError(err?.response?.data?.message || 'Unable to load premium live stream right now.')
+    } finally {
+      setJoiningPremium(false)
+    }
   }
 
   return (
@@ -62,6 +99,18 @@ export default function LiveHomePage() {
             <Radio className="w-4 h-4" />
             Start Streaming
           </Link>
+          <button
+            type="button"
+            onClick={() => handleJoinPremiumLatest().catch(() => {})}
+            disabled={loading || joiningPremium || !canAccessPremiumLive}
+            className={`flex items-center gap-2 px-4 py-2 border text-sm font-semibold rounded-xl transition-colors ${loading || joiningPremium || !canAccessPremiumLive
+              ? 'opacity-60 cursor-not-allowed border-amber-200 text-amber-700 dark:border-amber-700 dark:text-amber-300'
+              : 'border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/20'}`}
+            title={canAccessPremiumLive ? 'Join premium private stream (code 2026)' : 'Upgrade to premium plan to access private streams'}
+          >
+            <Video className="w-4 h-4" />
+            {joiningPremium ? 'Joining Premium…' : 'Join Premium Live'}
+          </button>
         </div>
       </header>
 
@@ -94,7 +143,7 @@ export default function LiveHomePage() {
             {streams.map((s) => (
               <Link
                 key={s._id}
-                to={`/live/${s.streamId}`}
+                to={`/live/${s.streamId}${s.accessLevel === 'premium' ? `?code=${encodeURIComponent(premiumCode)}` : ''}`}
                 className="card p-4 hover:shadow-md transition-shadow group"
               >
                 <div className="aspect-video bg-slate-800 dark:bg-slate-900 rounded-xl mb-3 flex items-center justify-center">
@@ -107,6 +156,11 @@ export default function LiveHomePage() {
                     <p className="text-[11px] text-slate-400 mt-0.5">Tap to join instantly</p>
                   </div>
                   <span className="flex items-center gap-1 text-xs text-red-500 shrink-0">
+                    {s.accessLevel === 'premium' && (
+                      <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 mr-1">
+                        PREMIUM
+                      </span>
+                    )}
                     <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
                     LIVE
                   </span>

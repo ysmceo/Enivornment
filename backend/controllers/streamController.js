@@ -1,4 +1,5 @@
 const Stream = require('../models/Stream');
+const User = require('../models/User');
 const { buildNewStreamPayload } = require('../services/streamService');
 const { resolveIsAdult, hasPremiumAccess } = require('../middleware/auth');
 
@@ -48,7 +49,7 @@ const startStream = async (req, res) => {
 
     const io = req.app.get('io');
     if (io) {
-      io.emit('stream:started', {
+      const streamStartedPayload = {
         streamId: stream.streamId,
         roomId: stream.roomId,
         title: stream.title,
@@ -60,7 +61,24 @@ const startStream = async (req, res) => {
           role: req.user.role,
         },
         joinPath: `/live/${stream.streamId}`,
-      });
+      };
+
+      if (stream.accessLevel === 'premium') {
+        const audience = await User.find({
+          isActive: true,
+          $or: [
+            { role: 'admin' },
+            { premiumPlanActive: true },
+            { premiumPlanStatus: 'active' },
+          ],
+        }).select('_id');
+
+        audience.forEach((member) => {
+          io.to(`user_${String(member._id)}`).emit('stream:started', streamStartedPayload);
+        });
+      } else {
+        io.emit('stream:started', streamStartedPayload);
+      }
     }
 
     res.status(201).json({ success: true, stream });

@@ -143,6 +143,15 @@ export function AuthProvider({ children }) {
       const streamId = payload?.streamId || payload?.roomId
       if (!streamId) return
 
+      const isPremiumStream = payload?.accessLevel === 'premium'
+      const canAccessPremium = user?.role === 'admin' || user?.premiumPlanActive === true || user?.premiumPlanStatus === 'active'
+      if (isPremiumStream && !canAccessPremium) return
+
+      const premiumCode = String(import.meta.env.VITE_PREMIUM_STREAM_CODE || '2026').trim()
+      const joinPath = isPremiumStream
+        ? `/live/${streamId}?code=${encodeURIComponent(premiumCode)}`
+        : `/live/${streamId}`
+
       const starterName = payload?.startedBy?.name || 'A user'
       const title = payload?.title || 'Live stream'
 
@@ -162,7 +171,7 @@ export function AuthProvider({ children }) {
             className="mt-3 inline-flex items-center rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
             onClick={() => {
               toast.dismiss(t.id)
-              window.location.assign(`/live/${streamId}`)
+              window.location.assign(joinPath)
             }}
           >
             Join Live
@@ -186,7 +195,7 @@ export function AuthProvider({ children }) {
     return () => {
       socket.disconnect()
     }
-  }, [token])
+  }, [token, user?.premiumPlanActive, user?.premiumPlanStatus, user?.role])
 
   const value = useMemo(
     () => ({

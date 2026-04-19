@@ -29,7 +29,8 @@ export default function AdminLiveViewerPage() {
         return
       }
 
-      navigate(`/admin/live/${encodeURIComponent(latestStreamId)}`)
+      const query = latest?.accessLevel === 'premium' ? `?code=${encodeURIComponent(premiumCode)}` : ''
+      navigate(`/admin/live/${encodeURIComponent(latestStreamId)}${query}`)
     } catch (err) {
       setJoinError(err?.response?.data?.message || 'Unable to load active streams right now.')
     } finally {
