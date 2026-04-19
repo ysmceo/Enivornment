@@ -1,6 +1,33 @@
 const jwt  = require('jsonwebtoken');
 const User = require('../models/User');
 
+const getAgeFromDate = (dateInput) => {
+  const dob = new Date(dateInput);
+  if (Number.isNaN(dob.getTime())) return null;
+
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const monthDiff = today.getMonth() - dob.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+    age -= 1;
+  }
+
+  return age;
+};
+
+const resolveIsAdult = (userLike) => {
+  const age = getAgeFromDate(userLike?.dateOfBirth);
+  if (typeof age === 'number') return age >= 18;
+  return userLike?.isAdult !== false;
+};
+
+const hasPremiumAccess = (userLike) => {
+  if (!userLike) return false;
+  if (userLike.role === 'admin') return true;
+  if (userLike.premiumPlanActive === true) return true;
+  return userLike.premiumPlanStatus === 'active';
+};
+
 /**
  * protect
  * Verifies the JWT from the Authorization header or cookie.
@@ -79,4 +106,29 @@ const requireVerified = (req, res, next) => {
   next();
 };
 
-module.exports = { protect, authorize, requireAdmin, requireVerified };
+/**
+ * requireAdultForLive
+ * Blocks under-18 non-admin accounts from live-video functionality.
+ */
+const requireAdultForLive = (req, res, next) => {
+  if (req.user?.role === 'admin') return next();
+
+  if (!resolveIsAdult(req.user)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Live video is only available to adult (18+) accounts.',
+    });
+  }
+
+  next();
+};
+
+module.exports = {
+  protect,
+  authorize,
+  requireAdmin,
+  requireVerified,
+  requireAdultForLive,
+  resolveIsAdult,
+  hasPremiumAccess,
+};

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { FileWarning, ShieldCheck, Users, Clock, Star } from 'lucide-react'
+import { FileWarning, ShieldCheck, Users, Clock, Star, RefreshCw } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import AdminSidebar from '../components/AdminSidebar'
 import ThemeToggle from '../components/ThemeToggle'
@@ -30,6 +30,8 @@ const isUsableGoogleMapsKey = (value) => {
 }
 
 const buildHealthChecks = (configHealth) => {
+  const hasUsableMapsKey = isUsableGoogleMapsKey(GOOGLE_MAPS_API_KEY)
+
   const checks = [
     {
       key: 'database',
@@ -54,8 +56,8 @@ const buildHealthChecks = (configHealth) => {
     {
       key: 'maps',
       label: 'Browser Maps Key',
-      healthy: isUsableGoogleMapsKey(GOOGLE_MAPS_API_KEY),
-      okStatus: 'configured',
+      healthy: true,
+      okStatus: hasUsableMapsKey ? 'configured' : 'fallback',
       badStatus: 'fallback',
       envFile: 'frontend/.env',
       envKeys: ['VITE_GOOGLE_MAPS_API_KEY'],
@@ -76,16 +78,51 @@ const buildHealthChecks = (configHealth) => {
   return checks
 }
 
+const formatLoadIssue = (label, result) => {
+  if (result?.status !== 'rejected') return label
+
+  const status = Number(result?.reason?.response?.status || 0)
+
+  if (label === 'audit trail' && (status === 401 || status === 403)) {
+    return 'audit trail (admin session expired — sign in again)'
+  }
+
+  if (status === 401 || status === 403) {
+    return `${label} (authentication required)`
+  }
+
+  if (status >= 500) {
+    return `${label} (server unavailable)`
+  }
+
+  return label
+}
+
 export default function AdminDashboard() {
   const { on } = useSocket()
   const [stats, setStats] = useState(null)
   const [recentReports, setRecentReports] = useState([])
   const [auditLogs, setAuditLogs] = useState([])
+  const [auditUnavailableMessage, setAuditUnavailableMessage] = useState('')
   const [mapSummary, setMapSummary] = useState(null)
   const [configHealth, setConfigHealth] = useState(null)
+  const [adminNotifications, setAdminNotifications] = useState([])
+  const [unreadAlertCount, setUnreadAlertCount] = useState(0)
+  const [markingReadId, setMarkingReadId] = useState('')
+  const [markingAllRead, setMarkingAllRead] = useState(false)
+  const [loadIssues, setLoadIssues] = useState([])
+  const [lastRefreshedAt, setLastRefreshedAt] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const refreshInFlightRef = useRef(false)
+  const realtimePulseTimeoutRef = useRef(null)
+  const realtimePopoverRef = useRef(null)
+  const realtimeToggleButtonRef = useRef(null)
   const [avatarErrors, setAvatarErrors] = useState({})
+  const [isLiveSyncPulse, setIsLiveSyncPulse] = useState(false)
+  const [lastRealtimeSignalAt, setLastRealtimeSignalAt] = useState(null)
+  const [showRealtimeEvents, setShowRealtimeEvents] = useState(false)
+  const [recentRealtimeEvents, setRecentRealtimeEvents] = useState([])
 
   const markAvatarError = (key) => {
     setAvatarErrors((prev) => ({ ...prev, [key]: true }))
@@ -110,30 +147,108 @@ export default function AdminDashboard() {
   const healthChecks = buildHealthChecks(configHealth)
   const failingChecks = healthChecks.filter((item) => !item.healthy)
 
-  const load = useCallback(async ({ silent = false } = {}) => {
+  const formatWeeklyTrend = (value) => {
+    const numeric = Number(value || 0)
+    const rounded = Math.round(Math.abs(numeric))
+    if (numeric > 0) return `● +${rounded}% this week`
+    if (numeric < 0) return `● -${rounded}% this week`
+    return '● 0% this week'
+  }
+
+  const getWeeklyTrendClass = (direction) => {
+    if (direction === 'up') return 'text-emerald-600 dark:text-emerald-400 font-semibold'
+    if (direction === 'down') return 'text-rose-600 dark:text-rose-400 font-semibold'
+    return 'text-slate-500 dark:text-slate-400 font-semibold'
+  }
+
+  const load = useCallback(async ({ silent = false, manual = false } = {}) => {
     if (refreshInFlightRef.current) return
     refreshInFlightRef.current = true
 
     try {
+      if (manual) setIsRefreshing(true)
       if (!silent) setLoading(true)
 
-      const [statsRes, reportsRes, auditRes, mapRes, healthRes] = await Promise.all([
+      const [statsRes, reportsRes, auditRes, mapRes, healthRes, notifRes] = await Promise.allSettled([
         reportService.getAdminStats(),
         reportService.adminGetAllReports({ limit: 8 }),
         userService.getAuditLogs({ limit: 6 }),
         reportService.getMapSummary(),
         platformService.getConfigHealth(),
+        userService.getAdminNotifications({ limit: 8 }),
       ])
-      setStats(statsRes.data.stats)
-      setRecentReports(reportsRes.data.reports || [])
-      setAuditLogs(auditRes.data.logs || [])
-      setMapSummary(mapRes?.data?.summary || null)
-      setConfigHealth(healthRes?.data?.configHealth || null)
+
+      const failed = []
+
+      if (statsRes.status === 'fulfilled') setStats(statsRes.value?.data?.stats || null)
+      else failed.push(formatLoadIssue('overview stats', statsRes))
+
+      if (reportsRes.status === 'fulfilled') setRecentReports(reportsRes.value?.data?.reports || [])
+      else failed.push(formatLoadIssue('latest reports', reportsRes))
+
+      if (auditRes.status === 'fulfilled') {
+        setAuditLogs(auditRes.value?.data?.logs || [])
+        setAuditUnavailableMessage('')
+      } else {
+        setAuditLogs([])
+        const auditIssue = formatLoadIssue('audit trail', auditRes)
+          .replace(/^audit trail\s*/i, '')
+          .trim()
+        setAuditUnavailableMessage(auditIssue || 'temporarily unavailable')
+      }
+
+      if (mapRes.status === 'fulfilled') setMapSummary(mapRes.value?.data?.summary || null)
+      else failed.push(formatLoadIssue('map summary', mapRes))
+
+      if (healthRes.status === 'fulfilled') setConfigHealth(healthRes.value?.data?.configHealth || null)
+      else failed.push(formatLoadIssue('config health', healthRes))
+
+      if (notifRes.status === 'fulfilled') {
+        setAdminNotifications(notifRes.value?.data?.notifications || [])
+        setUnreadAlertCount(Number(notifRes.value?.data?.unreadCount || 0))
+      } else {
+        failed.push(formatLoadIssue('admin alerts', notifRes))
+      }
+
+      setLoadIssues(failed)
+      setLastRefreshedAt(new Date().toISOString())
     } finally {
       refreshInFlightRef.current = false
+      if (manual) setIsRefreshing(false)
       if (!silent) setLoading(false)
     }
   }, [])
+
+  const triggerRealtimeSync = useCallback((label, payload = null) => {
+    const occurredAt = new Date().toISOString()
+    const payloadReason = String(payload?.reason || payload?.message || '').trim()
+    const reason = payloadReason || label
+
+    setLastRealtimeSignalAt(occurredAt)
+    setIsLiveSyncPulse(true)
+    setRecentRealtimeEvents((prev) => {
+      const next = [
+        {
+          id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          label,
+          reason,
+          at: occurredAt,
+        },
+        ...prev,
+      ]
+      return next.slice(0, 8)
+    })
+
+    if (realtimePulseTimeoutRef.current) {
+      clearTimeout(realtimePulseTimeoutRef.current)
+    }
+
+    realtimePulseTimeoutRef.current = setTimeout(() => {
+      setIsLiveSyncPulse(false)
+    }, 2200)
+
+    load({ silent: true }).catch(() => {})
+  }, [load])
 
   useEffect(() => {
     load().catch(() => setLoading(false))
@@ -157,26 +272,81 @@ export default function AdminDashboard() {
   }, [load])
 
   useEffect(() => {
-    const offNotification = on('notification', () => {
-      load({ silent: true }).catch(() => {})
-    })
-    const offStatusUpdate = on('report-status-update', () => {
-      load({ silent: true }).catch(() => {})
-    })
-    const offStreamStarted = on('stream:started', () => {
-      load({ silent: true }).catch(() => {})
-    })
-    const offStreamEnded = on('stream:ended', () => {
-      load({ silent: true }).catch(() => {})
-    })
+    const offNotification = on('notification', (payload) => triggerRealtimeSync('notification', payload))
+    const offStatusUpdate = on('report-status-update', (payload) => triggerRealtimeSync('report status update', payload))
+    const offOverviewUpdated = on('admin:overview-updated', (payload) => triggerRealtimeSync('admin overview updated', payload))
+    const offStreamStarted = on('stream:started', (payload) => triggerRealtimeSync('stream started', payload))
+    const offStreamEnded = on('stream:ended', (payload) => triggerRealtimeSync('stream ended', payload))
 
     return () => {
       offNotification?.()
       offStatusUpdate?.()
+      offOverviewUpdated?.()
       offStreamStarted?.()
       offStreamEnded?.()
     }
-  }, [load, on])
+  }, [on, triggerRealtimeSync])
+
+  useEffect(() => {
+    return () => {
+      if (realtimePulseTimeoutRef.current) {
+        clearTimeout(realtimePulseTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!showRealtimeEvents) return undefined
+
+    const handleDocumentMouseDown = (event) => {
+      const target = event.target
+
+      if (realtimePopoverRef.current?.contains(target)) return
+      if (realtimeToggleButtonRef.current?.contains(target)) return
+
+      setShowRealtimeEvents(false)
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setShowRealtimeEvents(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleDocumentMouseDown)
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentMouseDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [showRealtimeEvents])
+
+  const markAlertRead = useCallback(async (notificationId) => {
+    if (!notificationId) return
+    setMarkingReadId(notificationId)
+    try {
+      await userService.markAdminNotificationRead(notificationId)
+      setAdminNotifications((prev) => prev.map((item) => (
+        item._id === notificationId ? { ...item, readAt: item.readAt || new Date().toISOString() } : item
+      )))
+      setUnreadAlertCount((prev) => Math.max(Number(prev || 0) - 1, 0))
+    } finally {
+      setMarkingReadId('')
+    }
+  }, [])
+
+  const markAllAlertsRead = useCallback(async () => {
+    if (markingAllRead || unreadAlertCount <= 0) return
+    setMarkingAllRead(true)
+    try {
+      await userService.markAllAdminNotificationsRead()
+      setAdminNotifications((prev) => prev.map((item) => ({ ...item, readAt: item.readAt || new Date().toISOString() })))
+      setUnreadAlertCount(0)
+    } finally {
+      setMarkingAllRead(false)
+    }
+  }, [markingAllRead, unreadAlertCount])
 
   if (loading) {
     return (
@@ -195,11 +365,143 @@ export default function AdminDashboard() {
           <div>
             <h1 className="text-base font-extrabold bg-gradient-to-r from-indigo-700 to-violet-700 dark:from-indigo-300 dark:to-violet-300 bg-clip-text text-transparent">Admin Overview</h1>
             <p className="text-xs text-slate-600 dark:text-slate-400">Central moderation dashboard</p>
+            <div className="mt-1 relative inline-block">
+              <button
+                type="button"
+                onClick={() => setShowRealtimeEvents((prev) => !prev)}
+                className="inline-flex items-center gap-2 rounded-full border border-emerald-200/70 dark:border-emerald-800/70 bg-emerald-50/80 dark:bg-emerald-900/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300"
+                aria-expanded={showRealtimeEvents}
+                aria-label="Toggle live sync event log"
+                ref={realtimeToggleButtonRef}
+              >
+                <span className="relative flex h-2 w-2">
+                  <span className={`absolute inline-flex h-full w-full rounded-full bg-emerald-400 ${isLiveSyncPulse ? 'animate-ping opacity-80' : 'opacity-0'}`} />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                </span>
+                {isLiveSyncPulse ? 'Live sync active' : 'Live sync ready'}
+                {lastRealtimeSignalAt && (
+                  <span className="text-[10px] text-emerald-600/90 dark:text-emerald-400/90">
+                    · Last event {new Date(lastRealtimeSignalAt).toLocaleTimeString()}
+                  </span>
+                )}
+              </button>
+
+              {showRealtimeEvents && (
+                <div
+                  className="absolute z-20 mt-1 w-[320px] max-w-[85vw] rounded-xl border border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 shadow-xl backdrop-blur p-3"
+                  ref={realtimePopoverRef}
+                >
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Recent realtime events</p>
+                    <button
+                      type="button"
+                      onClick={() => setShowRealtimeEvents(false)}
+                      className="text-[10px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                    >
+                      Close
+                    </button>
+                  </div>
+
+                  {recentRealtimeEvents.length === 0 ? (
+                    <p className="text-[11px] text-slate-500">Waiting for first socket event…</p>
+                  ) : (
+                    <ul className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                      {recentRealtimeEvents.map((eventItem) => (
+                        <li key={eventItem.id} className="rounded-lg border border-slate-200/70 dark:border-slate-700/70 bg-slate-50/60 dark:bg-slate-800/60 px-2.5 py-2">
+                          <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 capitalize">{eventItem.label}</p>
+                          <p className="text-[11px] text-slate-600 dark:text-slate-400">{eventItem.reason}</p>
+                          <p className="text-[10px] text-slate-500 mt-0.5">{new Date(eventItem.at).toLocaleTimeString()}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => load({ silent: true, manual: true }).catch(() => {})}
+              disabled={isRefreshing}
+              className={`btn-secondary text-xs inline-flex items-center gap-1 ${isRefreshing ? 'opacity-70 cursor-not-allowed' : ''}`}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              {isRefreshing ? 'Refreshing...' : 'Refresh'}
+            </button>
+            <ThemeToggle />
+          </div>
         </header>
 
         <main className="flex-1 overflow-y-auto p-6 space-y-5">
+          <section className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/40 px-4 py-2 text-xs text-slate-500 dark:text-slate-400">
+            Last refreshed: {lastRefreshedAt ? new Date(lastRefreshedAt).toLocaleTimeString() : 'Waiting for first sync...'}
+          </section>
+
+          <section className="card p-4 border border-indigo-300/30 bg-gradient-to-r from-indigo-500/10 via-transparent to-cyan-500/10">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Admin Alerts</h2>
+                <p className="text-xs text-slate-500">Unread: <span className="font-semibold text-indigo-600 dark:text-indigo-300">{unreadAlertCount}</span></p>
+              </div>
+              <button
+                type="button"
+                onClick={() => markAllAlertsRead().catch(() => {})}
+                disabled={markingAllRead || unreadAlertCount <= 0}
+                className={`btn-secondary text-xs ${markingAllRead || unreadAlertCount <= 0 ? 'opacity-60 cursor-not-allowed' : ''}`}
+              >
+                {markingAllRead ? 'Marking…' : 'Mark all read'}
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {adminNotifications.length === 0 ? (
+                <p className="text-xs text-slate-500">No admin alerts yet.</p>
+              ) : (
+                adminNotifications.map((item) => (
+                  <div key={item._id} className={`rounded-lg border px-3 py-2 ${item.readAt ? 'border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/40' : 'border-indigo-300/60 dark:border-indigo-700/70 bg-indigo-50/60 dark:bg-indigo-900/20'}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{item.title}</p>
+                        <p className="text-xs text-slate-600 dark:text-slate-400 break-words">{item.message}</p>
+                        <p className="text-[11px] text-slate-500 mt-1">{item.createdAt ? new Date(item.createdAt).toLocaleString() : ''}</p>
+                      </div>
+
+                      {!item.readAt && (
+                        <button
+                          type="button"
+                          onClick={() => markAlertRead(item._id).catch(() => {})}
+                          disabled={markingReadId === item._id}
+                          className={`text-xs font-semibold text-indigo-600 hover:text-indigo-700 ${markingReadId === item._id ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        >
+                          {markingReadId === item._id ? 'Saving…' : 'Mark read'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+
+          {loadIssues.length > 0 && (
+            <section className="rounded-xl border border-amber-300/70 dark:border-amber-700/70 bg-amber-50/70 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p>
+                  Partial refresh: {loadIssues.join(', ')} {loadIssues.length > 1 ? 'were' : 'was'} unavailable. Showing latest available data.
+                </p>
+                {loadIssues.some((issue) => issue.includes('session expired') || issue.includes('authentication required')) && (
+                  <Link
+                    to="/login"
+                    className="inline-flex items-center gap-1 rounded-md border border-amber-500/60 bg-amber-100/80 dark:bg-amber-900/40 px-2.5 py-1 text-xs font-semibold text-amber-900 dark:text-amber-200 hover:bg-amber-200/70 dark:hover:bg-amber-900/60"
+                  >
+                    Sign in again
+                  </Link>
+                )}
+              </div>
+            </section>
+          )}
+
           {configHealth && (
             <section className="card p-4 space-y-2 border border-indigo-400/25 bg-gradient-to-r from-indigo-500/10 via-transparent to-violet-500/10">
               <p className="text-xs uppercase tracking-wide text-slate-500">System Setup Health</p>
@@ -232,10 +534,34 @@ export default function AdminDashboard() {
           )}
 
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-            <StatsCard icon={Users} label="Users" value={stats?.totalUsers ?? 0} color="blue" />
-            <StatsCard icon={FileWarning} label="Reports" value={stats?.totalReports ?? 0} color="indigo" />
-            <StatsCard icon={Clock} label="Pending" value={stats?.pendingReports ?? 0} color="amber" />
-            <StatsCard icon={ShieldCheck} label="ID Pending" value={stats?.pendingVerifications ?? 0} color="emerald" />
+            <Link to="/admin/users" className="block">
+              <StatsCard
+                icon={Users}
+                label="Users"
+                value={stats?.totalUsers ?? 0}
+                color="blue"
+                trend={Math.round(Number(stats?.userTrend7d?.changePct || 0))}
+                trendLabel={`${formatWeeklyTrend(stats?.userTrend7d?.changePct)} · 7d ${stats?.userTrend7d?.current ?? 0} vs ${stats?.userTrend7d?.previous ?? 0}`}
+                trendLabelClassName={getWeeklyTrendClass(stats?.userTrend7d?.direction)}
+              />
+            </Link>
+            <Link to="/admin/reports" className="block">
+              <StatsCard
+                icon={FileWarning}
+                label="Reports"
+                value={stats?.totalReports ?? 0}
+                color="indigo"
+                trend={Math.round(Number(stats?.reportTrend7d?.changePct || 0))}
+                trendLabel={`${formatWeeklyTrend(stats?.reportTrend7d?.changePct)} · 7d ${stats?.reportTrend7d?.current ?? 0} vs ${stats?.reportTrend7d?.previous ?? 0}`}
+                trendLabelClassName={getWeeklyTrendClass(stats?.reportTrend7d?.direction)}
+              />
+            </Link>
+            <Link to="/admin/reports" className="block">
+              <StatsCard icon={Clock} label="Pending" value={stats?.pendingReports ?? 0} color="amber" />
+            </Link>
+            <Link to="/admin/verification" className="block">
+              <StatsCard icon={ShieldCheck} label="ID Pending" value={stats?.pendingVerifications ?? 0} color="emerald" />
+            </Link>
           </div>
 
           <div className="grid md:grid-cols-3 gap-4">
@@ -250,6 +576,42 @@ export default function AdminDashboard() {
             <div className="card p-4 bg-gradient-to-br from-indigo-500/10 to-transparent border border-indigo-500/25">
               <p className="text-sm text-slate-500">Active live streams</p>
               <p className="text-2xl font-bold text-indigo-600">{stats?.activeStreams ?? 0}</p>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-4">
+            <div className="card p-4 bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/25">
+              <p className="text-sm text-slate-500">Verified accounts</p>
+              <p className="text-2xl font-bold text-emerald-600">{stats?.verifiedUsers ?? 0}</p>
+              <p className="text-xs text-slate-500 mt-1">Awaiting/Unverified: {stats?.pendingOrUnverifiedUsers ?? 0}</p>
+            </div>
+            <div className="card p-4 bg-gradient-to-br from-slate-500/10 to-transparent border border-slate-400/30">
+              <p className="text-sm text-slate-500">Inactive accounts</p>
+              <p className="text-2xl font-bold text-slate-700 dark:text-slate-200">{stats?.inactiveUsers ?? 0}</p>
+              <p className="text-xs text-slate-500 mt-1">Rejected IDs: {stats?.rejectedVerifications ?? 0}</p>
+            </div>
+            <div className="card p-4 bg-gradient-to-br from-cyan-500/10 to-transparent border border-cyan-500/25">
+              <p className="text-sm text-slate-500">Today activity</p>
+              <p className="text-2xl font-bold text-cyan-600">{stats?.newReportsToday ?? 0} reports</p>
+              <p className="text-xs text-slate-500 mt-1">New users today: {stats?.newUsersToday ?? 0}</p>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-4">
+            <div className="card p-4 bg-gradient-to-br from-indigo-500/10 to-transparent border border-indigo-500/25">
+              <p className="text-sm text-slate-500">Under-review reports</p>
+              <p className="text-2xl font-bold text-indigo-600">{stats?.reportsUnderReview ?? 0}</p>
+            </div>
+            <div className="card p-4 bg-gradient-to-br from-fuchsia-500/10 to-transparent border border-fuchsia-500/25">
+              <p className="text-sm text-slate-500">User roles</p>
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 mt-1">
+                Users {stats?.usersByRole?.user ?? 0} · Authority {stats?.usersByRole?.authority ?? 0} · Admin {stats?.usersByRole?.admin ?? 0}
+              </p>
+            </div>
+            <div className="card p-4 bg-gradient-to-br from-violet-500/10 to-transparent border border-violet-500/25">
+              <p className="text-sm text-slate-500">Total streams</p>
+              <p className="text-2xl font-bold text-violet-600">{stats?.totalStreams ?? 0}</p>
+              <p className="text-xs text-slate-500 mt-1">Active now: {stats?.activeStreams ?? 0}</p>
             </div>
           </div>
 
@@ -351,7 +713,11 @@ export default function AdminDashboard() {
 
             <div className="divide-y divide-slate-200 dark:divide-slate-700">
               {auditLogs.length === 0 ? (
-                <p className="p-4 text-sm text-slate-500">No audit activity yet.</p>
+                <p className="p-4 text-sm text-slate-500">
+                  {auditUnavailableMessage
+                    ? `Audit logs temporarily unavailable ${auditUnavailableMessage}.`
+                    : 'No audit activity yet.'}
+                </p>
               ) : (
                 auditLogs.map((log) => (
                   <div key={log._id} className="p-4 text-sm flex items-start gap-3">

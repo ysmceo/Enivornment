@@ -61,12 +61,15 @@ export const userService = {
   getIdentityReviewAssets: (id) => api.get(`/admin/users/${id}/identity-assets`),
   verifyGovernmentId: (id, data) => api.patch(`/admin/users/${id}/verify-id`, data),
   getAuditLogs: (params) => api.get('/admin/audit-logs', { params }),
+  getAdminNotifications: (params) => api.get('/admin/notifications', { params }),
+  markAdminNotificationRead: (id) => api.patch(`/admin/notifications/${id}/read`),
+  markAllAdminNotificationsRead: () => api.patch('/admin/notifications/read-all'),
 };
 
 export const streamService = {
-  getActiveStreams: () => api.get('/streams'),
+  getActiveStreams: (params) => api.get('/streams', { params }),
   getMyStreams:     () => api.get('/streams/my'),
-  getStreamById:   (id)   => api.get(`/streams/${id}`),
+  getStreamById:   (id, params)   => api.get(`/streams/${id}`, { params }),
   startStream:     (data) => api.post('/streams', data),
   endStream:       (id)   => api.patch(`/streams/${id}/end`),
 };

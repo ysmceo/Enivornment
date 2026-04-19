@@ -17,10 +17,12 @@ const GLOBAL_WORLD_SOURCES = [
 const cache = new Map();
 const inFlightByKey = new Map();
 const lastRefreshAttemptByKey = new Map();
-const CACHE_TTL_MS = 3 * 60 * 1000;
-const CACHE_STALE_TTL_MS = 10 * 60 * 1000;
+const CACHE_TTL_MS = 60 * 1000;
+const CACHE_STALE_TTL_MS = 5 * 60 * 1000;
 const REFRESH_THROTTLE_MS = 8000;
 const GOOGLE_NEWS_RSS_BASE_URL = 'https://news.google.com/rss/search';
+const BBC_WORLD_RSS_URL = 'https://feeds.bbci.co.uk/news/world/rss.xml';
+const CNN_WORLD_RSS_URL = 'http://rss.cnn.com/rss/edition_world.rss';
 
 const FALLBACK_NEWS = {
   nigeria: [
@@ -122,7 +124,7 @@ const toIsoOrNull = (value) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 };
 
-const parseGoogleNewsRss = async (xml, limit) => {
+const parseGoogleNewsRss = async (xml, limit, sourceFallback = 'Google News') => {
   const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
   const items = [];
 
@@ -133,7 +135,7 @@ const parseGoogleNewsRss = async (xml, limit) => {
     const url = extractXmlTag(itemXml, 'link');
     const publishedAt = extractXmlTag(itemXml, 'pubDate');
     const descriptionRaw = extractXmlTag(itemXml, 'description');
-    const source = extractXmlTag(itemXml, 'source') || 'Google News';
+    const source = extractXmlTag(itemXml, 'source') || sourceFallback || 'Google News';
     const description = stripHtml(descriptionRaw);
 
     const summaryPayload = await summarizeArticle({
@@ -172,6 +174,13 @@ const fetchGoogleNewsRss = async ({ query, regionCode, language, limit }) => {
   if (!res.ok) throw new Error(`Google News RSS request failed (${res.status}).`);
   const xml = await res.text();
   return parseGoogleNewsRss(xml, limit);
+};
+
+const fetchDirectRssFeed = async ({ url, limit, sourceFallback }) => {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Direct RSS request failed (${res.status}) for ${url}`);
+  const xml = await res.text();
+  return parseGoogleNewsRss(xml, limit, sourceFallback);
 };
 
 const heuristicSummary = (article) => {
@@ -255,6 +264,70 @@ const sanitizeArticleForReading = (article, region) => ({
   ...article,
   url: toReadableArticleUrl({ url: article.url, title: article.title, region }),
 });
+
+const articleKey = (article) => {
+  const url = cleanText(article?.url).toLowerCase();
+  if (url) return `url:${url}`;
+
+  const title = cleanText(article?.title).toLowerCase();
+  const source = cleanText(article?.source).toLowerCase();
+  if (!title) return '';
+
+  return `title:${title}|source:${source}`;
+};
+
+const mergeUniqueArticles = (primary = [], secondary = [], limit = 20) => {
+  const merged = [];
+  const seen = new Set();
+
+  for (const article of [...primary, ...secondary]) {
+    const key = articleKey(article);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    merged.push(article);
+    if (merged.length >= limit) break;
+  }
+
+  return merged;
+};
+
+const fetchWorldRssBundle = async ({ category, limit }) => {
+  const worldQuery = resolveWorldRssQuery(category);
+  const perQueryLimit = Math.max(5, Math.ceil(limit / 2));
+
+  const [generalWorld, bbcWorldSearch, cnnWorldSearch, bbcWorldDirect, cnnWorldDirect] = await Promise.all([
+    fetchGoogleNewsRss({
+      query: worldQuery,
+      regionCode: 'US',
+      language: 'en',
+      limit: perQueryLimit,
+    }),
+    fetchGoogleNewsRss({
+      query: 'BBC world news',
+      regionCode: 'GB',
+      language: 'en',
+      limit: perQueryLimit,
+    }),
+    fetchGoogleNewsRss({
+      query: 'CNN world news',
+      regionCode: 'US',
+      language: 'en',
+      limit: perQueryLimit,
+    }),
+    fetchDirectRssFeed({
+      url: BBC_WORLD_RSS_URL,
+      limit: perQueryLimit,
+      sourceFallback: 'BBC',
+    }),
+    fetchDirectRssFeed({
+      url: CNN_WORLD_RSS_URL,
+      limit: perQueryLimit,
+      sourceFallback: 'CNN',
+    }),
+  ]);
+
+  return mergeUniqueArticles([], [...bbcWorldDirect, ...cnnWorldDirect, ...bbcWorldSearch, ...cnnWorldSearch, ...generalWorld], limit);
+};
 
 const resolveNigeriaCategory = (category) => {
   const c = cleanText(category).toLowerCase();
@@ -340,12 +413,7 @@ const getNewsBundle = async ({ ngState, ngCategory, limit = 8, page = 1 }) => {
     try {
       if (!NEWS_API_KEY || NEWS_API_KEY === 'replace_me_news_api_key') {
         [worldRss, nigeriaRss] = await Promise.all([
-          fetchGoogleNewsRss({
-            query: resolveWorldRssQuery(category),
-            regionCode: 'US',
-            language: 'en',
-            limit: cappedLimit,
-          }),
+          fetchWorldRssBundle({ category, limit: cappedLimit }),
           fetchGoogleNewsRss({
             query: resolveNigeriaQuery({ state, category }),
             regionCode: 'NG',
@@ -383,12 +451,7 @@ const getNewsBundle = async ({ ngState, ngCategory, limit = 8, page = 1 }) => {
       console.warn('[News] Primary provider failed, attempting RSS fallback:', err.message);
       try {
         [worldRss, nigeriaRss] = await Promise.all([
-          fetchGoogleNewsRss({
-            query: resolveWorldRssQuery(category),
-            regionCode: 'US',
-            language: 'en',
-            limit: cappedLimit,
-          }),
+          fetchWorldRssBundle({ category, limit: cappedLimit }),
           fetchGoogleNewsRss({
             query: resolveNigeriaQuery({ state, category }),
             regionCode: 'NG',
@@ -416,44 +479,40 @@ const getNewsBundle = async ({ ngState, ngCategory, limit = 8, page = 1 }) => {
     let worldReadable = world.map((article) => sanitizeArticleForReading(article, 'world'));
     let nigeriaReadable = nigeria.map((article) => sanitizeArticleForReading(article, 'nigeria'));
 
-    if (sourceMode === 'live' && (!worldReadable.length || !nigeriaReadable.length)) {
+    if (sourceMode === 'live') {
       try {
         const [worldBackfill, nigeriaBackfill] = await Promise.all([
-          worldReadable.length
-            ? Promise.resolve([])
-            : fetchGoogleNewsRss({
-                query: resolveWorldRssQuery(category),
-                regionCode: 'US',
-                language: 'en',
-                limit: cappedLimit,
-              }),
-          nigeriaReadable.length
-            ? Promise.resolve([])
-            : fetchGoogleNewsRss({
-                query: resolveNigeriaQuery({ state, category }),
-                regionCode: 'NG',
-                language: 'en',
-                limit: cappedLimit,
-              }),
+          fetchWorldRssBundle({ category, limit: cappedLimit }),
+          fetchGoogleNewsRss({
+            query: resolveNigeriaQuery({ state, category }),
+            regionCode: 'NG',
+            language: 'en',
+            limit: cappedLimit,
+          }),
         ]);
 
-        if (!worldReadable.length && worldBackfill.length) {
-          worldReadable = worldBackfill
-            .slice(0, cappedLimit)
-            .map((article) => sanitizeArticleForReading(article, 'world'));
-        }
+        const worldBackfillReadable = worldBackfill
+          .slice(0, cappedLimit)
+          .map((article) => sanitizeArticleForReading(article, 'world'));
 
-        if (!nigeriaReadable.length && nigeriaBackfill.length) {
-          nigeriaReadable = nigeriaBackfill
-            .slice(0, cappedLimit)
-            .map((article) => sanitizeArticleForReading(article, 'nigeria'));
-        }
+        const nigeriaBackfillReadable = nigeriaBackfill
+          .slice(0, cappedLimit)
+          .map((article) => sanitizeArticleForReading(article, 'nigeria'));
 
-        if (worldBackfill.length || nigeriaBackfill.length) {
+        const mergedWorld = mergeUniqueArticles(worldReadable, worldBackfillReadable, cappedLimit);
+        const mergedNigeria = mergeUniqueArticles(nigeriaReadable, nigeriaBackfillReadable, cappedLimit);
+
+        const worldExpanded = mergedWorld.length > worldReadable.length;
+        const nigeriaExpanded = mergedNigeria.length > nigeriaReadable.length;
+
+        worldReadable = mergedWorld;
+        nigeriaReadable = mergedNigeria;
+
+        if (worldExpanded || nigeriaExpanded || worldBackfill.length || nigeriaBackfill.length) {
           sourceMode = 'hybrid';
         }
       } catch (backfillErr) {
-        console.warn('[News] Live empty-result RSS backfill failed:', backfillErr.message);
+        console.warn('[News] Live RSS augmentation failed:', backfillErr.message);
       }
     }
 

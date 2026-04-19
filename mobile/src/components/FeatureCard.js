@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { colors, radius, spacing, typography } from '../theme/tokens';
 
 export default function FeatureCard({ label, value }) {
   return (
@@ -12,12 +13,12 @@ export default function FeatureCard({ label, value }) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#0f172a',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#1e293b',
-    borderRadius: 12,
-    padding: 14,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.md,
   },
-  label: { color: '#94a3b8', marginBottom: 6 },
-  value: { color: '#f8fafc', fontWeight: '700' },
+  label: { color: colors.textMuted, marginBottom: 6, fontSize: typography.caption, textTransform: 'uppercase', letterSpacing: 0.8 },
+  value: { color: colors.textPrimary, fontWeight: '800', fontSize: typography.body },
 });

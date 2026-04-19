@@ -1,6 +1,7 @@
 const User      = require('../models/User');
 const Report    = require('../models/Report');
 const AuditLog = require('../models/AuditLog');
+const Notification = require('../models/Notification');
 const cloudinary = require('../config/cloudinary');
 const { decrypt } = require('../utils/encryption');
 const { recordAuditLog } = require('../services/auditService');
@@ -15,20 +16,47 @@ const getReadableStatus = (status) => {
   return status;
 };
 
+const emitAdminOverviewRefresh = (req, reason) => {
+  const io = req.app.get('io') || global.__io;
+  if (!io) return;
+
+  io.emit('admin:overview-updated', {
+    reason,
+    at: new Date().toISOString(),
+  });
+};
+
 // ─── DASHBOARD STATS ──────────────────────────────────────────────────────
 /**
  * GET /api/admin/stats
  */
 const getStats = async (req, res) => {
   try {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const startOfCurrent7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const startOfPrevious7d = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+
     const [
       totalUsers,
       activeUsers,
+      inactiveUsers,
+      verifiedUsers,
+      rejectedVerifications,
       totalReports,
       pendingReports,
+      reportsUnderReview,
       resolvedReports,
       pendingVerifications,
+      newUsersToday,
+      newReportsToday,
+      newUsersCurrent7d,
+      newUsersPrevious7d,
+      newReportsCurrent7d,
+      newReportsPrevious7d,
+      roleBreakdown,
       activeStreams,
+      totalStreams,
       highRiskReports,
       escalatedReports,
       journeyFeedbackSummary,
@@ -37,11 +65,26 @@ const getStats = async (req, res) => {
     ] = await Promise.all([
       User.countDocuments({ role: { $in: ['user', 'authority', 'admin'] } }),
       User.countDocuments({ role: { $in: ['user', 'authority', 'admin'] }, isActive: true }),
+      User.countDocuments({ role: { $in: ['user', 'authority', 'admin'] }, isActive: false }),
+      User.countDocuments({ role: { $in: ['user', 'authority', 'admin'] }, idVerificationStatus: 'verified' }),
+      User.countDocuments({ role: { $in: ['user', 'authority', 'admin'] }, idVerificationStatus: 'rejected' }),
       Report.countDocuments(),
       Report.countDocuments({ status: 'pending' }),
+      Report.countDocuments({ status: { $in: ['in_progress', 'under_review', 'investigating'] } }),
       Report.countDocuments({ status: { $in: ['solved', 'resolved', 'closed'] } }),
       User.countDocuments({ role: { $in: ['user', 'authority'] }, idVerificationStatus: 'pending' }),
+      User.countDocuments({ role: { $in: ['user', 'authority', 'admin'] }, createdAt: { $gte: startOfToday } }),
+      Report.countDocuments({ createdAt: { $gte: startOfToday } }),
+      User.countDocuments({ role: { $in: ['user', 'authority', 'admin'] }, createdAt: { $gte: startOfCurrent7d } }),
+      User.countDocuments({ role: { $in: ['user', 'authority', 'admin'] }, createdAt: { $gte: startOfPrevious7d, $lt: startOfCurrent7d } }),
+      Report.countDocuments({ createdAt: { $gte: startOfCurrent7d } }),
+      Report.countDocuments({ createdAt: { $gte: startOfPrevious7d, $lt: startOfCurrent7d } }),
+      User.aggregate([
+        { $match: { role: { $in: ['user', 'authority', 'admin'] } } },
+        { $group: { _id: '$role', count: { $sum: 1 } } },
+      ]),
       require('../models/Stream').countDocuments({ status: 'active' }),
+      require('../models/Stream').countDocuments(),
       Report.countDocuments({ riskScore: { $gte: 75 } }),
       Report.countDocuments({ 'escalation.escalated': true }),
       Report.aggregate([
@@ -100,6 +143,29 @@ const getStats = async (req, res) => {
     const previousAvg = Number(previousJourneyWindow?.[0]?.averageRating || 0);
     const change = currentAvg - previousAvg;
     const changePct = previousAvg > 0 ? (change / previousAvg) * 100 : 0;
+    const pendingOrUnverifiedUsers = Math.max(totalUsers - verifiedUsers, 0);
+    const userChange7d = Number(newUsersCurrent7d || 0) - Number(newUsersPrevious7d || 0);
+    const reportChange7d = Number(newReportsCurrent7d || 0) - Number(newReportsPrevious7d || 0);
+
+    const userChangePct7d = Number(newUsersPrevious7d || 0) > 0
+      ? (userChange7d / Number(newUsersPrevious7d || 1)) * 100
+      : 0;
+    const reportChangePct7d = Number(newReportsPrevious7d || 0) > 0
+      ? (reportChange7d / Number(newReportsPrevious7d || 1)) * 100
+      : 0;
+
+    const usersByRole = {
+      admin: 0,
+      authority: 0,
+      user: 0,
+    };
+
+    roleBreakdown.forEach((row) => {
+      const role = String(row?._id || '').toLowerCase();
+      if (Object.prototype.hasOwnProperty.call(usersByRole, role)) {
+        usersByRole[role] = Number(row?.count || 0);
+      }
+    });
 
     // Reports in last 7 days
     const since7days  = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -121,13 +187,36 @@ const getStats = async (req, res) => {
       stats: {
         totalUsers,
         activeUsers,
+        inactiveUsers,
+        verifiedUsers,
+        pendingOrUnverifiedUsers,
+        rejectedVerifications,
         totalReports,
         pendingReports,
+        reportsUnderReview,
         resolvedReports,
         pendingVerifications,
+        newUsersToday,
+        newReportsToday,
+        userTrend7d: {
+          current: Number(newUsersCurrent7d || 0),
+          previous: Number(newUsersPrevious7d || 0),
+          change: userChange7d,
+          changePct: userChangePct7d,
+          direction: userChange7d > 0 ? 'up' : userChange7d < 0 ? 'down' : 'flat',
+        },
+        reportTrend7d: {
+          current: Number(newReportsCurrent7d || 0),
+          previous: Number(newReportsPrevious7d || 0),
+          change: reportChange7d,
+          changePct: reportChangePct7d,
+          direction: reportChange7d > 0 ? 'up' : reportChange7d < 0 ? 'down' : 'flat',
+        },
+        totalStreams,
         activeStreams,
         highRiskReports,
         escalatedReports,
+        usersByRole,
         averageJourneyRating: Number(journeyFeedbackSummary?.[0]?.averageJourneyRating || 0),
         totalJourneyFeedback: Number(journeyFeedbackSummary?.[0]?.totalJourneyFeedback || 0),
         journeyRatingTrend: {
@@ -287,6 +376,8 @@ const updateReportStatus = async (req, res) => {
       });
     }
 
+    emitAdminOverviewRefresh(req, 'report-status-updated');
+
     res.status(200).json({
       success: true,
       message: 'Report status updated.',
@@ -311,6 +402,8 @@ const adminDeleteReport = async (req, res) => {
       await cloudinary.uploader.destroy(item.publicId, { resource_type: item.resourceType }).catch(() => {});
     }
     await report.deleteOne();
+
+    emitAdminOverviewRefresh(req, 'report-deleted-by-admin');
 
     await recordAuditLog({
       req,
@@ -416,6 +509,8 @@ const toggleUserStatus = async (req, res) => {
 
     user.isActive = !user.isActive;
     await user.save({ validateBeforeSave: false });
+
+    emitAdminOverviewRefresh(req, 'user-status-toggled');
 
     await recordAuditLog({
       req,
@@ -535,6 +630,8 @@ const verifyGovernmentId = async (req, res) => {
     user.verificationLastCheckedAt = new Date();
     await user.save({ validateBeforeSave: false });
 
+    emitAdminOverviewRefresh(req, 'user-id-reviewed');
+
     await recordAuditLog({
       req,
       actor: req.user._id,
@@ -589,6 +686,117 @@ const getAuditLogs = async (req, res) => {
   }
 };
 
+// ─── ADMIN ALERTS / NOTIFICATIONS ────────────────────────────────────────
+/**
+ * GET /api/admin/notifications
+ */
+const getAdminNotifications = async (req, res) => {
+  try {
+    const page = Math.max(parseInt(req.query.page) || 1, 1);
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+    const skip = (page - 1) * limit;
+    const unreadOnly = String(req.query.unreadOnly || '').toLowerCase() === 'true';
+
+    const adminTypePrefixes = [
+      'admin_',
+      'user_registered',
+      'report_created',
+      'report_additional_evidence_submitted',
+      'stream_',
+      'sos_',
+    ];
+
+    const typeRegex = new RegExp(`^(${adminTypePrefixes.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'i');
+
+    const filter = {
+      $or: [
+        { 'payload.audience': 'admin' },
+        { type: typeRegex },
+      ],
+    };
+
+    if (unreadOnly) {
+      filter.readAt = null;
+    }
+
+    const [notifications, total, unreadCount] = await Promise.all([
+      Notification.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Notification.countDocuments(filter),
+      Notification.countDocuments({ ...filter, readAt: null }),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      notifications,
+      unreadCount,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Could not fetch admin notifications.' });
+  }
+};
+
+/**
+ * PATCH /api/admin/notifications/:id/read
+ */
+const markAdminNotificationRead = async (req, res) => {
+  try {
+    const notification = await Notification.findById(req.params.id);
+    if (!notification) {
+      return res.status(404).json({ success: false, message: 'Notification not found.' });
+    }
+
+    if (!notification.readAt) {
+      notification.readAt = new Date();
+      await notification.save();
+    }
+
+    return res.status(200).json({ success: true, notification });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Could not mark notification as read.' });
+  }
+};
+
+/**
+ * PATCH /api/admin/notifications/read-all
+ */
+const markAllAdminNotificationsRead = async (req, res) => {
+  try {
+    const adminTypePrefixes = [
+      'admin_',
+      'user_registered',
+      'report_created',
+      'report_additional_evidence_submitted',
+      'stream_',
+      'sos_',
+    ];
+    const typeRegex = new RegExp(`^(${adminTypePrefixes.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'i');
+
+    const filter = {
+      readAt: null,
+      $or: [
+        { 'payload.audience': 'admin' },
+        { type: typeRegex },
+      ],
+    };
+
+    const result = await Notification.updateMany(filter, {
+      $set: { readAt: new Date() },
+    });
+
+    return res.status(200).json({
+      success: true,
+      markedCount: result.modifiedCount || 0,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Could not mark all notifications as read.' });
+  }
+};
+
 module.exports = {
   getStats,
   getAllReports,
@@ -601,4 +809,7 @@ module.exports = {
   getIdentityReviewAssets,
   verifyGovernmentId,
   getAuditLogs,
+  getAdminNotifications,
+  markAdminNotificationRead,
+  markAllAdminNotificationsRead,
 };

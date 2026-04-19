@@ -2,11 +2,11 @@ const express = require('express');
 const {
   startStream, endStream, getActiveStreams, getStreamById, getMyStreams,
 } = require('../controllers/streamController');
-const { protect } = require('../middleware/auth');
+const { protect, requireAdultForLive } = require('../middleware/auth');
 
 const router = express.Router();
 
-router.use(protect);
+router.use(protect, requireAdultForLive);
 
 router.get('/',        getActiveStreams);
 router.get('/my',      getMyStreams);

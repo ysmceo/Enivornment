@@ -10,6 +10,7 @@ const {
   buildAuthCookieOptions,
   sanitizeUserForResponse,
 } = require('../services/authService');
+const { queueNotification } = require('../services/notificationService');
 
 const buildResetPasswordUrl = (resetToken) => {
   const explicitResetBase = String(process.env.RESET_PASSWORD_URL || '').trim();
@@ -120,6 +121,55 @@ const computePendingVerificationStatus = (userDocLike) => {
   }
 
   return 'none';
+};
+
+const emitAdminOverviewRefresh = (req, reason) => {
+  const io = req.app.get('io') || global.__io;
+  if (!io) return;
+
+  io.emit('admin:overview-updated', {
+    reason,
+    at: new Date().toISOString(),
+  });
+};
+
+const notifyAdmins = async ({ req, type, title, message, payload = {} }) => {
+  try {
+    const admins = await User.find({ role: 'admin', isActive: true }).select('_id name email phone');
+    if (!admins.length) return;
+
+    const io = req.app.get('io') || global.__io;
+
+    await Promise.all(
+      admins.map(async (admin) => {
+        const notification = await queueNotification({
+          userId: admin._id,
+          channel: 'in_app',
+          type,
+          title,
+          message,
+          payload: {
+            ...payload,
+            audience: 'admin',
+            recipients: [{ userId: admin._id, name: admin.name, email: admin.email, phone: admin.phone }],
+          },
+        });
+
+        if (io) {
+          io.to(`user_${String(admin._id)}`).emit('notification', {
+            _id: notification._id,
+            type: notification.type,
+            title: notification.title,
+            message: notification.message,
+            payload: notification.payload,
+            createdAt: notification.createdAt,
+          });
+        }
+      })
+    );
+  } catch {
+    // Admin notification failures should not block auth workflows.
+  }
 };
 
 const applyProviderVerificationIfReady = async ({ req, user, idCardNumber, governmentIdUrl, selfieUrl }) => {
@@ -275,6 +325,22 @@ const register = async (req, res) => {
         isAdult: user.isAdult,
         adultConsentAccepted: user.adultConsentAccepted,
         minorConsentAccepted: user.minorConsentAccepted,
+      },
+    });
+
+    emitAdminOverviewRefresh(req, 'user-registered');
+
+    await notifyAdmins({
+      req,
+      type: 'user_registered',
+      title: 'New user registered',
+      message: `${user.name || 'A new user'} just created an account.`,
+      payload: {
+        userId: user._id,
+        name: user.name,
+        email: user.email,
+        state: user.state,
+        isAdult: user.isAdult,
       },
     });
 
@@ -638,6 +704,8 @@ const uploadGovernmentId = async (req, res) => {
       },
     });
 
+    emitAdminOverviewRefresh(req, 'government-id-uploaded');
+
     res.status(200).json({
       success: true,
       message:
@@ -730,6 +798,8 @@ const uploadVerificationSelfie = async (req, res) => {
         hasGovernmentId: Boolean(user.governmentIdUrl),
       },
     });
+
+    emitAdminOverviewRefresh(req, 'verification-selfie-uploaded');
 
     res.status(200).json({
       success: true,

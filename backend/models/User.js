@@ -216,6 +216,27 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+
+    premiumPlanStatus: {
+      type: String,
+      enum: ['none', 'active', 'expired', 'cancelled'],
+      default: 'none',
+    },
+
+    premiumPlanActive: {
+      type: Boolean,
+      default: false,
+    },
+
+    premiumPlanStartedAt: {
+      type: Date,
+      default: null,
+    },
+
+    premiumPlanExpiresAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -246,6 +267,7 @@ const userSchema = new mongoose.Schema(
 userSchema.index({ idVerificationStatus: 1 });
 userSchema.index({ role: 1 });
 userSchema.index({ isVerified: 1 });
+userSchema.index({ premiumPlanStatus: 1, premiumPlanActive: 1 });
 
 // ─── Hooks ─────────────────────────────────────────────────────────────────
 

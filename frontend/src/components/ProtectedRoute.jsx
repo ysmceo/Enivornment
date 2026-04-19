@@ -13,7 +13,28 @@ const hasRequiredRole = (userRole, requiredRole) => {
   return userRole === requiredRole
 }
 
-export default function ProtectedRoute({ children, role, verified = false }) {
+const getAgeFromDate = (dateInput) => {
+  if (!dateInput) return null
+  const dob = new Date(dateInput)
+  if (Number.isNaN(dob.getTime())) return null
+
+  const today = new Date()
+  let age = today.getFullYear() - dob.getFullYear()
+  const monthDiff = today.getMonth() - dob.getMonth()
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+    age -= 1
+  }
+
+  return age
+}
+
+const isAdultAccount = (user) => {
+  const age = getAgeFromDate(user?.dateOfBirth)
+  if (typeof age === 'number') return age >= 18
+  return user?.isAdult !== false
+}
+
+export default function ProtectedRoute({ children, role, verified = false, adultOnly = false }) {
   const { user, bootstrapping } = useAuth()
   const location = useLocation()
 
@@ -30,6 +51,10 @@ export default function ProtectedRoute({ children, role, verified = false }) {
   }
 
   if (verified && user.idVerificationStatus !== 'verified') {
+    return <Navigate to="/dashboard" replace />
+  }
+
+  if (adultOnly && user?.role !== 'admin' && !isAdultAccount(user)) {
     return <Navigate to="/dashboard" replace />
   }
 

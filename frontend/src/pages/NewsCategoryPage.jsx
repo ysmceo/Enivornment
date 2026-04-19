@@ -145,6 +145,18 @@ export default function NewsCategoryPage() {
                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
                   Expanded category coverage with live updates every minute.
                 </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold">
+                  <span className="inline-flex items-center rounded-full px-2.5 py-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                    Daily fresh headlines • auto-refresh 1 min
+                  </span>
+                  <span className="inline-flex items-center rounded-full px-2.5 py-1 bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                    Coverage: BBC, CNN, global + Nigeria
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 font-medium">
+                  Last successful refresh:{' '}
+                  {newsData.generatedAt ? new Date(newsData.generatedAt).toLocaleTimeString() : 'Waiting for first sync...'}
+                </p>
                 {newsData.sourceMode === 'fallback' && (
                   <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 font-semibold">
                     Using fallback sample news (set NEWS_API_KEY in backend/.env for live feeds).

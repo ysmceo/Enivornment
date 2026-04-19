@@ -2,6 +2,14 @@ const jwt = require('jsonwebtoken');
 const Stream = require('../models/Stream');
 const StreamComment = require('../models/StreamComment');
 const User = require('../models/User');
+const { hasPremiumAccess, resolveIsAdult } = require('../middleware/auth');
+
+const getPremiumStreamCode = () => String(process.env.PREMIUM_STREAM_CODE || '2026').trim();
+
+const isValidPremiumCode = (candidate) => {
+  const expected = getPremiumStreamCode();
+  return Boolean(expected) && String(candidate || '').trim() === expected;
+};
 
 const updateViewerStats = async (roomId, viewerCount) => {
   await Stream.findOneAndUpdate(
@@ -48,7 +56,9 @@ const registerSignalingHandlers = (io) => {
       }
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await User.findById(decoded.id).select('name role isActive idVerificationStatus');
+      const user = await User.findById(decoded.id).select(
+        'name role isActive idVerificationStatus isAdult dateOfBirth premiumPlanActive premiumPlanStatus'
+      );
 
       if (!user || !user.isActive) {
         socket.data.user = null;
@@ -60,6 +70,10 @@ const registerSignalingHandlers = (io) => {
         name: user.name || 'User',
         role: user.role,
         idVerificationStatus: user.idVerificationStatus,
+        isAdult: user.isAdult,
+        dateOfBirth: user.dateOfBirth,
+        premiumPlanActive: user.premiumPlanActive,
+        premiumPlanStatus: user.premiumPlanStatus,
       };
 
       return next();
@@ -158,7 +172,7 @@ const registerSignalingHandlers = (io) => {
       }
     });
 
-    socket.on('join-stream', async ({ roomId, role }, ack = () => {}) => {
+    socket.on('join-stream', async ({ roomId, role, accessCode }, ack = () => {}) => {
       if (!roomId || !role) {
         ack({ ok: false, error: 'roomId and role are required' });
         return;
@@ -180,6 +194,34 @@ const registerSignalingHandlers = (io) => {
 
       const user = socket.data.user;
 
+      const streamRecord = await Stream.findOne({
+        status: 'active',
+        $or: [{ roomId }, { streamId: roomId }],
+      }).select('_id roomId streamId streamer accessLevel');
+
+      if (!streamRecord) {
+        ack({ ok: false, error: 'This stream is not active.' });
+        return;
+      }
+
+      const canonicalRoomId = streamRecord.roomId;
+      const streamAccessLevel = streamRecord.accessLevel || 'public';
+
+      if (streamAccessLevel === 'premium') {
+        const adminViewer = role === 'admin' && user?.role === 'admin';
+        if (!adminViewer) {
+          if (!hasPremiumAccess(user)) {
+            ack({ ok: false, error: 'Premium plan access is required for this private stream.' });
+            return;
+          }
+
+          if (!isValidPremiumCode(accessCode)) {
+            ack({ ok: false, error: 'Valid premium stream code is required.' });
+            return;
+          }
+        }
+      }
+
       if (role === 'streamer') {
         if (!user) {
           ack({ ok: false, error: 'Authentication required to stream.' });
@@ -195,6 +237,16 @@ const registerSignalingHandlers = (io) => {
           ack({ ok: false, error: 'Identity verification is required before streaming.' });
           return;
         }
+
+        if (user.role === 'user' && !resolveIsAdult(user)) {
+          ack({ ok: false, error: 'Live video is only available to adult (18+) accounts.' });
+          return;
+        }
+
+        if (String(streamRecord.streamer) !== String(user.id) && user.role !== 'admin') {
+          ack({ ok: false, error: 'You are not authorized to stream in this room.' });
+          return;
+        }
       }
 
       if (role === 'admin') {
@@ -204,7 +256,7 @@ const registerSignalingHandlers = (io) => {
         }
       }
 
-      const room = ensureRoom(roomId);
+      const room = ensureRoom(canonicalRoomId);
 
       if (role === 'streamer') {
         if (room.streamerSocketId && room.streamerSocketId !== socket.id) {
@@ -217,21 +269,21 @@ const registerSignalingHandlers = (io) => {
         room.viewerSocketIds.add(socket.id);
       }
 
-      socket.join(roomId);
-      socket.data.roomId = roomId;
+      socket.join(canonicalRoomId);
+      socket.data.roomId = canonicalRoomId;
       socket.data.role = role;
       socket.data.joinedAt = Date.now();
 
-      emitViewerCount(roomId);
-      await updateViewerStats(roomId, room.viewerSocketIds.size);
+      emitViewerCount(canonicalRoomId);
+      await updateViewerStats(canonicalRoomId, room.viewerSocketIds.size);
 
       const response = {
         ok: true,
-        roomId,
+        roomId: canonicalRoomId,
         role,
         streamerSocketId: room.streamerSocketId,
         viewerCount: room.viewerSocketIds.size,
-        likesCount: getLikeSet(roomId).size,
+        likesCount: getLikeSet(canonicalRoomId).size,
         reactionCounts: room.reactionCounts || {},
       };
 
@@ -239,7 +291,7 @@ const registerSignalingHandlers = (io) => {
 
       if (role !== 'streamer' && room.streamerSocketId) {
         socket.emit('streamer-ready', {
-          roomId,
+          roomId: canonicalRoomId,
           streamerSocketId: room.streamerSocketId,
         });
       }

@@ -7,6 +7,8 @@ const { computeRiskAndEscalation } = require('../services/escalationService');
 const { sendHighPriorityIncidentAlerts } = require('../services/notificationService');
 const { recordAuditLog } = require('../services/auditService');
 
+const queueNotification = require('../services/notificationService').queueNotification;
+
 const toDisplayStatus = (status) => {
   if (status === 'in_progress') return 'in progress';
   if (status === 'investigating') return 'under investigation';
@@ -57,6 +59,56 @@ const notifyReportOwner = async ({ report, type, title, message, payload = {} })
   } catch {
     // Notification failures should not block core report workflow
   }
+};
+
+const notifyAdmins = async ({ req, type, title, message, payload = {} }) => {
+  try {
+    const admins = await User.find({ role: 'admin', isActive: true }).select('_id name email phone');
+    if (!admins.length) return;
+
+    const io = req.app.get('io') || global.__io;
+
+    await Promise.all(
+      admins.map(async (admin) => {
+        const notification = await queueNotification({
+          userId: admin._id,
+          reportId: payload.reportId || null,
+          channel: 'in_app',
+          type,
+          title,
+          message,
+          payload: {
+            ...payload,
+            audience: 'admin',
+            recipients: [{ userId: admin._id, name: admin.name, email: admin.email, phone: admin.phone }],
+          },
+        });
+
+        if (io) {
+          io.to(`user_${String(admin._id)}`).emit('notification', {
+            _id: notification._id,
+            type: notification.type,
+            title: notification.title,
+            message: notification.message,
+            payload: notification.payload,
+            createdAt: notification.createdAt,
+          });
+        }
+      })
+    );
+  } catch {
+    // Admin notification failures should not block core workflow.
+  }
+};
+
+const emitAdminOverviewRefresh = (req, reason) => {
+  const io = req.app.get('io') || global.__io;
+  if (!io) return;
+
+  io.emit('admin:overview-updated', {
+    reason,
+    at: new Date().toISOString(),
+  });
 };
 
 // ─── CREATE REPORT ────────────────────────────────────────────────────────
@@ -147,6 +199,26 @@ const createReport = async (req, res) => {
         adminUsers,
       });
     }
+
+    await notifyAdmins({
+      req,
+      type: 'report_created',
+      title: 'New report submitted',
+      message: `${req.user?.name || 'A user'} submitted a new report: ${report.caseId}.`,
+      payload: {
+        reportId: report._id,
+        caseId: report.caseId,
+        category: report.category,
+        severity: report.severity,
+        submittedBy: {
+          id: req.user?._id,
+          name: req.user?.name,
+          email: req.user?.email,
+        },
+      },
+    });
+
+    emitAdminOverviewRefresh(req, 'report-created');
 
     res.status(201).json({
       success: true,
@@ -421,6 +493,8 @@ const deleteReport = async (req, res) => {
 
     await report.deleteOne();
 
+    emitAdminOverviewRefresh(req, 'report-deleted-by-owner');
+
     await recordAuditLog({
       req,
       actor: req.user._id,
@@ -558,6 +632,24 @@ const submitAdditionalEvidence = async (req, res) => {
       metadata: {
         caseId: report.caseId,
         filesUploaded: media.length,
+      },
+    });
+
+    await notifyAdmins({
+      req,
+      type: 'report_additional_evidence_submitted',
+      title: 'New user evidence received',
+      message: `${req.user?.name || 'A user'} submitted additional evidence for case ${report.caseId}.`,
+      payload: {
+        reportId: report._id,
+        caseId: report.caseId,
+        filesUploaded: media.length,
+        note,
+        submittedBy: {
+          id: req.user?._id,
+          name: req.user?.name,
+          email: req.user?.email,
+        },
       },
     });
 

@@ -6,6 +6,7 @@ import AdminUsersScreen from '../screens/admin/AdminUsersScreen';
 import AdminVerificationScreen from '../screens/admin/AdminVerificationScreen';
 import CrimeAnalyticsScreen from '../screens/admin/CrimeAnalyticsScreen';
 import AdminLiveViewerScreen from '../screens/admin/AdminLiveViewerScreen';
+import SettingsScreen from '../screens/shared/SettingsScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -26,6 +27,7 @@ export default function AdminTabs() {
       <Tab.Screen name="Verify" component={AdminVerificationScreen} />
       <Tab.Screen name="Analytics" component={CrimeAnalyticsScreen} />
       <Tab.Screen name="LiveWatch" component={AdminLiveViewerScreen} options={{ title: 'Live' }} />
+      <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
   );
 }

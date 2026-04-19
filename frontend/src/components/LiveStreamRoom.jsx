@@ -2,8 +2,65 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { io } from 'socket.io-client'
 import { useAuth } from '../context/AuthContext'
 
+const toIceUrlList = (value) =>
+  String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+
+const parseJsonIceServers = (value) => {
+  if (!value) return []
+
+  try {
+    const parsed = JSON.parse(value)
+    if (!Array.isArray(parsed)) return []
+
+    return parsed
+      .filter((entry) => entry && (typeof entry.urls === 'string' || Array.isArray(entry.urls)))
+      .map((entry) => ({
+        ...entry,
+        urls: Array.isArray(entry.urls)
+          ? entry.urls.map((url) => String(url || '').trim()).filter(Boolean)
+          : String(entry.urls || '').trim(),
+      }))
+      .filter((entry) => (Array.isArray(entry.urls) ? entry.urls.length > 0 : Boolean(entry.urls)))
+  } catch {
+    return []
+  }
+}
+
+const buildIceServers = () => {
+  const fromJson = parseJsonIceServers(import.meta.env.VITE_WEBRTC_ICE_SERVERS)
+  if (fromJson.length > 0) return fromJson
+
+  const stunUrls = toIceUrlList(import.meta.env.VITE_WEBRTC_STUN_URLS)
+  const turnUrls = toIceUrlList(import.meta.env.VITE_WEBRTC_TURN_URLS)
+  const turnUsername = String(import.meta.env.VITE_WEBRTC_TURN_USERNAME || '').trim()
+  const turnCredential = String(import.meta.env.VITE_WEBRTC_TURN_CREDENTIAL || '').trim()
+
+  const servers = []
+
+  if (stunUrls.length > 0) {
+    servers.push({ urls: stunUrls.length === 1 ? stunUrls[0] : stunUrls })
+  }
+
+  if (turnUrls.length > 0) {
+    servers.push({
+      urls: turnUrls.length === 1 ? turnUrls[0] : turnUrls,
+      ...(turnUsername ? { username: turnUsername } : {}),
+      ...(turnCredential ? { credential: turnCredential } : {}),
+    })
+  }
+
+  if (servers.length === 0) {
+    return [{ urls: 'stun:stun.l.google.com:19302' }]
+  }
+
+  return servers
+}
+
 const RTC_CONFIG = {
-  iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+  iceServers: buildIceServers(),
 }
 
 const REACTION_OPTIONS = ['❤️', '🔥', '👏', '👍', '😂', '😮']
@@ -19,7 +76,7 @@ const SIGNALING_URL =
   import.meta.env.VITE_SOCKET_URL ||
   `${window.location.protocol}//${window.location.hostname}:${import.meta.env.VITE_API_PORT || '5001'}`
 
-export default function LiveStreamRoom({ role = 'viewer', initialRoomId = '', autoStart = false }) {
+export default function LiveStreamRoom({ role = 'viewer', initialRoomId = '', autoStart = false, accessCode = '' }) {
   const { token, user } = useAuth()
   const [roomId, setRoomId] = useState(initialRoomId)
   const [inSession, setInSession] = useState(false)
@@ -368,7 +425,7 @@ export default function LiveStreamRoom({ role = 'viewer', initialRoomId = '', au
       await ensureLocalMedia()
       const socket = connectSocket()
 
-      socket.emit('join-stream', { roomId, role }, async (ack) => {
+      socket.emit('join-stream', { roomId, role, accessCode }, async (ack) => {
         if (!ack?.ok) {
           setError(ack?.error || 'Failed to join stream room')
           return
@@ -392,7 +449,7 @@ export default function LiveStreamRoom({ role = 'viewer', initialRoomId = '', au
     } catch (err) {
       setError(`Unable to start session: ${err.message}`)
     }
-  }, [connectSocket, ensureLocalMedia, role, roomId, sendOffer])
+  }, [accessCode, connectSocket, ensureLocalMedia, role, roomId, sendOffer])
 
   useEffect(() => {
     if (!autoStart || inSession || autoStartTriggeredRef.current) return

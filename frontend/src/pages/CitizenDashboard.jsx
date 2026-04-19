@@ -93,6 +93,21 @@ const FORM_STEPS = [
   { id: 4, title: 'Review & Submit' },
 ]
 
+const getAgeFromDate = (dateInput) => {
+  if (!dateInput) return null
+  const dob = new Date(dateInput)
+  if (Number.isNaN(dob.getTime())) return null
+
+  const today = new Date()
+  let age = today.getFullYear() - dob.getFullYear()
+  const monthDiff = today.getMonth() - dob.getMonth()
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+    age -= 1
+  }
+
+  return age
+}
+
 export default function CitizenDashboard() {
   const { user, logout, refreshUser } = useAuth()
   const { on } = useSocket()
@@ -286,8 +301,10 @@ export default function CitizenDashboard() {
     return map
   }, [reports])
 
-  const canStartLiveStream = user?.role === 'user'
-  const isMinorAccount = user?.isAdult === false
+  const resolvedAge = getAgeFromDate(user?.dateOfBirth)
+  const isMinorAccount = typeof resolvedAge === 'number' ? resolvedAge < 18 : user?.isAdult === false
+  const canStartLiveStream = user?.role === 'user' && !isMinorAccount
+  const canAccessLiveVideo = !isMinorAccount
   const needsGovernmentIdForVerification = !isMinorAccount
   const hasGovernmentIdForVerification = Boolean(user?.hasGovernmentId)
   const hasSelfieForVerification = Boolean(user?.hasVerificationSelfie)
@@ -298,12 +315,15 @@ export default function CitizenDashboard() {
     ? hasGovernmentIdForVerification && hasSelfieForVerification
     : hasSelfieForVerification
   const liveStreamRestriction = useMemo(() => {
+    if (isMinorAccount) {
+      return 'Live video is disabled for minor accounts (below 18).'
+    }
     if (canStartLiveStream) return ''
     if (user?.role !== 'user') {
       return 'Live streaming can only be started from a citizen user account.'
     }
     return 'Live streaming is available to user accounts only.'
-  }, [canStartLiveStream, user?.idVerificationStatus, user?.role])
+  }, [canStartLiveStream, isMinorAccount, user?.idVerificationStatus, user?.role])
 
   const setField = (k, v) => setForm((p) => ({ ...p, [k]: v }))
 
@@ -864,7 +884,8 @@ export default function CitizenDashboard() {
             {needsGovernmentIdForVerification
               ? 'Uploading a government ID and selfie helps administrators validate submissions faster.'
               : 'For minor accounts, uploading a verification selfie helps administrators validate submissions faster without government ID upload.'}
-            {' '}You can still upload evidence, submit reports, and start live video as a user.
+            {' '}You can still upload evidence and submit reports.
+            {!isMinorAccount ? ' Live video is available for adult (18+) user accounts.' : ' Live video is disabled for minor accounts (below 18).'}
             Current status: <span className="font-semibold capitalize">{user?.idVerificationStatus || 'none'}</span>
             <span className="ml-2 inline-flex items-center rounded-full border border-indigo-300 dark:border-indigo-700 bg-indigo-100 dark:bg-indigo-900/30 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 dark:text-indigo-300">
               {verificationProgressPercent}% complete
@@ -983,7 +1004,18 @@ export default function CitizenDashboard() {
                 <p className="text-sm text-slate-500">Geolocated reports across all states + FCT</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Link to="/live" className="btn-secondary">View Live Streams</Link>
+                {canAccessLiveVideo ? (
+                  <Link to="/live" className="btn-secondary">View Live Streams</Link>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-secondary opacity-60 cursor-not-allowed"
+                    disabled
+                    title={liveStreamRestriction}
+                  >
+                    View Live Streams
+                  </button>
+                )}
                 {canStartLiveStream ? (
                   <Link to="/live/start" className="btn-secondary">Start Live Incident Stream</Link>
                 ) : (

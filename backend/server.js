@@ -1,5 +1,5 @@
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '.env') });
+require('dotenv').config({ path: path.join(__dirname, '.env'), override: true });
 const express         = require('express');
 const http            = require('http');
 const { Server }      = require('socket.io');
@@ -12,6 +12,15 @@ const morgan          = require('morgan');
 const cookieParser    = require('cookie-parser');
 const mongoose        = require('mongoose');
 const streamingConfig = require('./config/streaming');
+
+const isPlaceholderValue = (value = '') => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return true;
+  return ['replace', 'your_', 'placeholder', 'example', 'dummy', 'optional'].some((token) => normalized.includes(token));
+};
+
+const jwtConfigured = !isPlaceholderValue(process.env.JWT_SECRET);
+console.log(`[Startup] JWT secret configured: ${jwtConfigured ? 'yes' : 'no'}`);
 
 const connectDB       = require('./config/db');
 const { generalLimiter } = require('./middleware/rateLimiter');

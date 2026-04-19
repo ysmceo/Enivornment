@@ -1,7 +1,10 @@
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import LiveStreamRoom from '../components/LiveStreamRoom'
 
 export default function LiveViewerPage() {
   const { streamId } = useParams()
-  return <LiveStreamRoom role="viewer" initialRoomId={streamId || ''} />
+  const [searchParams] = useSearchParams()
+  const accessCode = String(searchParams.get('code') || '').trim()
+
+  return <LiveStreamRoom role="viewer" initialRoomId={streamId || ''} autoStart={Boolean(streamId)} accessCode={accessCode} />
 }

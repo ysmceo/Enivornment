@@ -148,7 +148,7 @@ export default function App() {
             <Route
               path="/live"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute adultOnly>
                   <LiveHomePage />
                 </ProtectedRoute>
               }
@@ -156,7 +156,7 @@ export default function App() {
             <Route
               path="/live/start"
               element={
-                <ProtectedRoute role={["user", "admin"]}>
+                <ProtectedRoute role={["user", "admin"]} adultOnly>
                   <LiveStartPage />
                 </ProtectedRoute>
               }
@@ -164,7 +164,7 @@ export default function App() {
             <Route
               path="/live/:streamId"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute adultOnly>
                   <LiveViewerPage />
                 </ProtectedRoute>
               }

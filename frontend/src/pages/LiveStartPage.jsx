@@ -1,11 +1,16 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { streamService } from '../services/reportService'
 import LiveStreamRoom from '../components/LiveStreamRoom'
 
 export default function LiveStartPage() {
+  const [searchParams] = useSearchParams()
   const [roomId, setRoomId] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  const premiumMode = searchParams.get('premium') === '1'
+  const premiumCode = String(import.meta.env.VITE_PREMIUM_STREAM_CODE || '2026').trim()
 
   useEffect(() => {
     let active = true
@@ -16,7 +21,9 @@ export default function LiveStartPage() {
         setError('')
 
         const { data } = await streamService.startStream({
-          title: 'Live Incident Stream',
+          title: premiumMode ? 'Premium Live Case & Interrogation Room' : 'Live Incident Stream',
+          accessLevel: premiumMode ? 'premium' : 'public',
+          ...(premiumMode ? { accessCode: premiumCode } : {}),
         })
 
         const nextRoomId = data?.stream?.streamId || data?.stream?.roomId || ''
@@ -39,7 +46,7 @@ export default function LiveStartPage() {
     return () => {
       active = false
     }
-  }, [])
+  }, [premiumCode, premiumMode])
 
   if (loading) {
     return (
@@ -60,5 +67,5 @@ export default function LiveStartPage() {
     )
   }
 
-  return <LiveStreamRoom role="streamer" initialRoomId={roomId} autoStart />
+  return <LiveStreamRoom role="streamer" initialRoomId={roomId} autoStart accessCode={premiumMode ? premiumCode : ''} />
 }

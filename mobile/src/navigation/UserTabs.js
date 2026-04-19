@@ -7,9 +7,33 @@ import SOSScreen from '../screens/user/SOSScreen';
 import LiveHomeScreen from '../screens/user/LiveHomeScreen';
 import NewsCategoryScreen from '../screens/user/NewsCategoryScreen';
 import NewsReaderScreen from '../screens/user/NewsReaderScreen';
+import SettingsScreen from '../screens/shared/SettingsScreen';
+import { useAuth } from '../context/AuthContext';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
+
+const getAgeFromDate = (dateInput) => {
+  if (!dateInput) return null;
+  const dob = new Date(dateInput);
+  if (Number.isNaN(dob.getTime())) return null;
+
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const monthDiff = today.getMonth() - dob.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+    age -= 1;
+  }
+
+  return age;
+};
+
+const isAdultAccount = (user) => {
+  if (user?.role === 'admin') return true;
+  const age = getAgeFromDate(user?.dateOfBirth);
+  if (typeof age === 'number') return age >= 18;
+  return user?.isAdult !== false;
+};
 
 function NewsStack() {
   return (
@@ -21,6 +45,9 @@ function NewsStack() {
 }
 
 export default function UserTabs() {
+  const { user } = useAuth();
+  const isMinorAccount = user?.role !== 'admin' && !isAdultAccount(user);
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -34,8 +61,16 @@ export default function UserTabs() {
       <Tab.Screen name="Dashboard" component={CitizenDashboardScreen} />
       <Tab.Screen name="Emergency" component={EmergencyDirectoryScreen} />
       <Tab.Screen name="SOS" component={SOSScreen} />
-      <Tab.Screen name="Live" component={LiveHomeScreen} />
+      <Tab.Screen
+        name="Live"
+        component={LiveHomeScreen}
+        options={{
+          title: isMinorAccount ? 'Live (18+)' : 'Live',
+          tabBarBadge: isMinorAccount ? '18+' : undefined,
+        }}
+      />
       <Tab.Screen name="News" component={NewsStack} options={{ headerShown: false }} />
+      <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
   );
 }

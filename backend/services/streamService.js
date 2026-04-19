@@ -7,6 +7,7 @@ const parseCoordinate = (value, fallback = 0) => {
 
 const buildNewStreamPayload = ({ body, userId }) => {
   const roomId = uuidv4();
+  const accessLevel = body.accessLevel === 'premium' ? 'premium' : 'public';
 
   return {
     roomId,
@@ -17,6 +18,7 @@ const buildNewStreamPayload = ({ body, userId }) => {
       streamer: userId,
       title: body.title || 'Live Report Stream',
       description: body.description || '',
+      accessLevel,
       linkedReport: body.linkedReport || null,
       roomId,
       status: 'active',

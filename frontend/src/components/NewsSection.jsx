@@ -225,6 +225,18 @@ export default function NewsSection() {
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
               Simple, clean updates across Nigeria and world headlines.
             </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold">
+              <span className="inline-flex items-center rounded-full px-2.5 py-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                Fresh updates every 1 minute
+              </span>
+              <span className="inline-flex items-center rounded-full px-2.5 py-1 bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                Sources: BBC, CNN, World + Nigeria
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 font-medium">
+              Last successful refresh:{' '}
+              {newsData.generatedAt ? new Date(newsData.generatedAt).toLocaleTimeString() : 'Waiting for first sync...'}
+            </p>
             {newsData.sourceMode === 'rss' && (
               <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-2 font-semibold">
                 Live mode: Google News RSS stream.

@@ -47,6 +47,13 @@ const streamSchema = new mongoose.Schema(
       default: '',
     },
 
+    accessLevel: {
+      type: String,
+      enum: ['public', 'premium'],
+      default: 'public',
+      index: true,
+    },
+
     // Optional: associate stream with an existing report
     linkedReport: {
       type: mongoose.Schema.Types.ObjectId,
@@ -121,5 +128,6 @@ streamSchema.index({ streamer: 1 });
 streamSchema.index({ userId: 1 });
 streamSchema.index({ status: 1 });
 streamSchema.index({ likesCount: -1 });
+streamSchema.index({ status: 1, accessLevel: 1, startedAt: -1 });
 
 module.exports = mongoose.model('Stream', streamSchema);

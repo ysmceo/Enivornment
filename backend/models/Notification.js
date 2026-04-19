@@ -52,6 +52,11 @@ const notificationSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    readAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
     error: {
       type: String,
       default: null,

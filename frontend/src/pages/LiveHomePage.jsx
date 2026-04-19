@@ -8,7 +8,8 @@ export default function LiveHomePage() {
   const navigate = useNavigate()
   const [streams, setStreams] = useState([])
   const [loading, setLoading] = useState(true)
-  const [joinCode, setJoinCode] = useState('')
+  const [joiningLatest, setJoiningLatest] = useState(false)
+  const [joinError, setJoinError] = useState('')
 
   useEffect(() => {
     streamService.getActiveStreams()
@@ -17,10 +18,22 @@ export default function LiveHomePage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const handleJoinByCode = () => {
-    const normalized = String(joinCode || '').trim()
-    if (!normalized) return
-    navigate(`/live/${encodeURIComponent(normalized)}`)
+  const handleJoinLatest = () => {
+    setJoinError('')
+    if (!streams.length) {
+      setJoinError('No active stream is available right now.')
+      return
+    }
+
+    const latest = streams[0]
+    const latestStreamId = latest?.streamId || latest?.roomId || ''
+    if (!latestStreamId) {
+      setJoinError('No active stream is available right now.')
+      return
+    }
+
+    setJoiningLatest(true)
+    navigate(`/live/${encodeURIComponent(latestStreamId)}`)
   }
 
   return (
@@ -35,34 +48,29 @@ export default function LiveHomePage() {
             <span className="text-red-500 ml-1 text-xs font-semibold">LIVE</span>
           </span>
         </div>
-        <Link to="/live/start" className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-xl transition-colors">
-          <Radio className="w-4 h-4" />
-          Start Streaming
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleJoinLatest}
+            disabled={loading || joiningLatest}
+            className={`flex items-center gap-2 px-4 py-2 border border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 text-sm font-semibold rounded-xl transition-colors ${loading || joiningLatest ? 'opacity-60 cursor-not-allowed' : 'hover:bg-indigo-50 dark:hover:bg-indigo-900/20'}`}
+          >
+            <Video className="w-4 h-4" />
+            {joiningLatest ? 'Joining…' : 'Join Live Now'}
+          </button>
+          <Link to="/live/start" className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-xl transition-colors">
+            <Radio className="w-4 h-4" />
+            Start Streaming
+          </Link>
+        </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
-        <section className="card p-4 mb-5">
-          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Join by Live Code</h2>
-          <p className="text-xs text-slate-500 mt-1">Enter a stream code to join instantly.</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <input
-              className="input flex-1 min-w-[220px]"
-              placeholder="Enter stream code"
-              value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  handleJoinByCode()
-                }
-              }}
-            />
-            <button type="button" className="btn-primary" onClick={handleJoinByCode} disabled={!joinCode.trim()}>
-              Join Live
-            </button>
-          </div>
-        </section>
+        {joinError && (
+          <section className="rounded-xl border border-amber-300/70 dark:border-amber-700/70 bg-amber-50/70 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-300 mb-5">
+            {joinError}
+          </section>
+        )}
 
         <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-6">Active Streams</h2>
 
@@ -96,7 +104,7 @@ export default function LiveHomePage() {
                   <div className="min-w-0">
                     <h3 className="text-sm font-semibold text-slate-900 dark:text-white truncate">{s.title || 'Untitled Stream'}</h3>
                     <p className="text-xs text-slate-500 mt-0.5">{s.streamer?.name || 'Anonymous'}</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Code: {s.streamId}</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Tap to join instantly</p>
                   </div>
                   <span className="flex items-center gap-1 text-xs text-red-500 shrink-0">
                     <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />

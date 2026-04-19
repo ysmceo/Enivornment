@@ -1,6 +1,6 @@
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 
-export default function StatsCard({ icon: Icon, label, value, trend, trendLabel, color = 'indigo' }) {
+export default function StatsCard({ icon: Icon, label, value, trend, trendLabel, trendLabelClassName = '', color = 'indigo' }) {
   const colorMap = {
     indigo: {
       iconBg: 'bg-indigo-50 dark:bg-indigo-900/30',
@@ -52,7 +52,7 @@ export default function StatsCard({ icon: Icon, label, value, trend, trendLabel,
       <div>
         <div className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">{value}</div>
         <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{label}</div>
-        {trendLabel && <div className="text-xs text-slate-400 dark:text-slate-500 mt-1">{trendLabel}</div>}
+        {trendLabel && <div className={`text-xs mt-1 ${trendLabelClassName || 'text-slate-400 dark:text-slate-500'}`}>{trendLabel}</div>}
       </div>
       <div className="h-1 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
         <div

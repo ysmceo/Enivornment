@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
+import { authService } from '../services/authService';
 
 const AuthContext = createContext(null);
 
@@ -33,6 +34,16 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     hydrate();
   }, []);
+
+  const refreshUser = async () => {
+    const res = await authService.getMe();
+    const latestUser = res?.data?.user || null;
+    setUser(latestUser);
+    if (latestUser) {
+      await AsyncStorage.setItem('cr_user', JSON.stringify(latestUser));
+    }
+    return latestUser;
+  };
 
   const login = async (email, password) => {
     setLoading(true);
@@ -97,6 +108,7 @@ export function AuthProvider({ children }) {
       login,
       register,
       logout,
+      refreshUser,
     }),
     [user, token, bootstrapping, loading]
   );

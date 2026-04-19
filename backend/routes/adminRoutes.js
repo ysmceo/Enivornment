@@ -11,6 +11,9 @@ const {
   getIdentityReviewAssets,
   verifyGovernmentId,
   getAuditLogs,
+  getAdminNotifications,
+  markAdminNotificationRead,
+  markAllAdminNotificationsRead,
 } = require('../controllers/adminController');
 const { protect, requireAdmin } = require('../middleware/auth');
 const { adminLimiter }          = require('../middleware/rateLimiter');
@@ -29,6 +32,9 @@ router.use(protect, requireAdmin, adminLimiter);
 // ─── Dashboard ─────────────────────────────────────────────────────────────
 router.get('/stats', getStats);
 router.get('/audit-logs', getAuditLogs);
+router.get('/notifications', getAdminNotifications);
+router.patch('/notifications/read-all', markAllAdminNotificationsRead);
+router.patch('/notifications/:id/read', mongoIdParamValidation('id'), validate, markAdminNotificationRead);
 
 // ─── Reports management ────────────────────────────────────────────────────
 router.get('/reports',           getAllReports);
