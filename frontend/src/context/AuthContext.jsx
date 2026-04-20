@@ -147,7 +147,7 @@ export function AuthProvider({ children }) {
       const canAccessPremium = user?.role === 'admin' || user?.premiumPlanActive === true || user?.premiumPlanStatus === 'active'
       if (isPremiumStream && !canAccessPremium) return
 
-      const premiumCode = String(import.meta.env.VITE_PREMIUM_STREAM_CODE || '2026').trim()
+      const premiumCode = String(import.meta.env.VITE_PREMIUM_STREAM_CODE || '1234').trim()
       const joinPath = isPremiumStream
         ? `/live/${streamId}?code=${encodeURIComponent(premiumCode)}`
         : `/live/${streamId}`

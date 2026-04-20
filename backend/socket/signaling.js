@@ -4,7 +4,7 @@ const StreamComment = require('../models/StreamComment');
 const User = require('../models/User');
 const { hasPremiumAccess, resolveIsAdult } = require('../middleware/auth');
 
-const getPremiumStreamCode = () => String(process.env.PREMIUM_STREAM_CODE || '2026').trim();
+const getPremiumStreamCode = () => String(process.env.PREMIUM_STREAM_CODE || '1234').trim();
 
 const isValidPremiumCode = (candidate) => {
   const expected = getPremiumStreamCode();

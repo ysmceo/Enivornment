@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { io } from 'socket.io-client'
 import { useAuth } from '../context/AuthContext'
 
@@ -77,6 +78,7 @@ const SIGNALING_URL =
   `${window.location.protocol}//${window.location.hostname}:${import.meta.env.VITE_API_PORT || '5001'}`
 
 export default function LiveStreamRoom({ role = 'viewer', initialRoomId = '', autoStart = false, accessCode = '' }) {
+  const navigate = useNavigate();
   const { token, user } = useAuth()
   const [roomId, setRoomId] = useState(initialRoomId)
   const [inSession, setInSession] = useState(false)
@@ -92,6 +94,7 @@ export default function LiveStreamRoom({ role = 'viewer', initialRoomId = '', au
   const [liked, setLiked] = useState(false)
   const [reactionCounts, setReactionCounts] = useState({})
   const [quality, setQuality] = useState('auto')
+  const [notActive, setNotActive] = useState(false)
 
   const socketRef = useRef(null)
   const localStreamRef = useRef(null)
@@ -415,6 +418,7 @@ export default function LiveStreamRoom({ role = 'viewer', initialRoomId = '', au
 
   const startSession = useCallback(async () => {
     setError('')
+    setNotActive(false)
 
     if (!roomId.trim()) {
       setError('Room ID is required')
@@ -428,6 +432,10 @@ export default function LiveStreamRoom({ role = 'viewer', initialRoomId = '', au
       socket.emit('join-stream', { roomId, role, accessCode }, async (ack) => {
         if (!ack?.ok) {
           setError(ack?.error || 'Failed to join stream room')
+          // If the error is about inactive or missing stream, show friendly message
+          if ((ack?.error || '').toLowerCase().includes('not active') || (ack?.error || '').toLowerCase().includes('not found') || (ack?.error || '').toLowerCase().includes('no streamer')) {
+            setNotActive(true)
+          }
           return
         }
 
@@ -448,6 +456,7 @@ export default function LiveStreamRoom({ role = 'viewer', initialRoomId = '', au
       })
     } catch (err) {
       setError(`Unable to start session: ${err.message}`)
+      setNotActive(true)
     }
   }, [accessCode, connectSocket, ensureLocalMedia, role, roomId, sendOffer])
 
@@ -537,6 +546,18 @@ export default function LiveStreamRoom({ role = 'viewer', initialRoomId = '', au
       setError('Unable to copy stream code automatically.')
     }
   }, [roomId])
+
+  if (notActive) {
+    return (
+      <section className="max-w-xl mx-auto p-6">
+        <div className="card p-6 space-y-5 text-center">
+          <h1 className="text-2xl font-bold text-red-700">This stream is not active</h1>
+          <p className="text-slate-500 mt-2">The stream you tried to join is not currently live or has ended.<br/>Please check the stream code or wait for the streamer to go live.</p>
+          <button className="btn-primary mt-4" onClick={() => navigate('/live')}>Go to Live Streams</button>
+        </div>
+      </section>
+    )
+  }
 
   return (
     <section className="max-w-6xl mx-auto p-6">

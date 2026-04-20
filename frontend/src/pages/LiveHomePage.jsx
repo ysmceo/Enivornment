@@ -5,7 +5,6 @@ import { streamService } from '../services/reportService'
 import { format } from 'date-fns'
 import { useAuth } from '../context/AuthContext'
 
-export default function LiveHomePage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [streams, setStreams] = useState([])
@@ -14,8 +13,22 @@ export default function LiveHomePage() {
   const [joiningPremium, setJoiningPremium] = useState(false)
   const [joinError, setJoinError] = useState('')
 
-  const premiumCode = String(import.meta.env.VITE_PREMIUM_STREAM_CODE || '2026').trim()
+  const premiumCode = String(import.meta.env.VITE_PREMIUM_STREAM_CODE || '1234').trim()
   const canAccessPremiumLive = user?.role === 'admin' || user?.premiumPlanActive === true || user?.premiumPlanStatus === 'active'
+  // Age/role logic
+  const getAge = (dob) => {
+    if (!dob) return null
+    const d = new Date(dob)
+    if (Number.isNaN(d.getTime())) return null
+    const today = new Date()
+    let age = today.getFullYear() - d.getFullYear()
+    const m = today.getMonth() - d.getMonth()
+    if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--
+    return age
+  }
+  const resolvedAge = getAge(user?.dateOfBirth)
+  const isMinor = typeof resolvedAge === 'number' ? resolvedAge < 18 : user?.isAdult === false
+  const isAdmin = user?.role === 'admin'
 
   useEffect(() => {
     streamService.getActiveStreams()
@@ -86,31 +99,40 @@ export default function LiveHomePage() {
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={handleJoinLatest}
-            disabled={loading || joiningLatest}
-            className={`flex items-center gap-2 px-4 py-2 border border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 text-sm font-semibold rounded-xl transition-colors ${loading || joiningLatest ? 'opacity-60 cursor-not-allowed' : 'hover:bg-indigo-50 dark:hover:bg-indigo-900/20'}`}
-          >
-            <Video className="w-4 h-4" />
-            {joiningLatest ? 'Joining…' : 'Join Live Now'}
-          </button>
-          <Link to="/live/start" className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-xl transition-colors">
-            <Radio className="w-4 h-4" />
-            Start Streaming
-          </Link>
-          <button
-            type="button"
-            onClick={() => handleJoinPremiumLatest().catch(() => {})}
-            disabled={loading || joiningPremium || !canAccessPremiumLive}
-            className={`flex items-center gap-2 px-4 py-2 border text-sm font-semibold rounded-xl transition-colors ${loading || joiningPremium || !canAccessPremiumLive
-              ? 'opacity-60 cursor-not-allowed border-amber-200 text-amber-700 dark:border-amber-700 dark:text-amber-300'
-              : 'border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/20'}`}
-            title={canAccessPremiumLive ? 'Join premium private stream (code 2026)' : 'Upgrade to premium plan to access private streams'}
-          >
-            <Video className="w-4 h-4" />
-            {joiningPremium ? 'Joining Premium…' : 'Join Premium Live'}
-          </button>
+          {/* Only adults can join/start live video */}
+          {!isMinor ? (
+            <>
+              <button
+                type="button"
+                onClick={handleJoinLatest}
+                disabled={loading || joiningLatest}
+                className={`flex items-center gap-2 px-4 py-2 border border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 text-sm font-semibold rounded-xl transition-colors ${loading || joiningLatest ? 'opacity-60 cursor-not-allowed' : 'hover:bg-indigo-50 dark:hover:bg-indigo-900/20'}`}
+              >
+                <Video className="w-4 h-4" />
+                {joiningLatest ? 'Joining…' : 'Join Live Now'}
+              </button>
+              <Link to="/live/start" className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-xl transition-colors">
+                <Radio className="w-4 h-4" />
+                Start Streaming
+              </Link>
+              <button
+                type="button"
+                onClick={() => handleJoinPremiumLatest().catch(() => {})}
+                disabled={loading || joiningPremium || !canAccessPremiumLive}
+                className={`flex items-center gap-2 px-4 py-2 border text-sm font-semibold rounded-xl transition-colors ${loading || joiningPremium || !canAccessPremiumLive
+                  ? 'opacity-60 cursor-not-allowed border-amber-200 text-amber-700 dark:border-amber-700 dark:text-amber-300'
+                  : 'border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/20'}`}
+                title={canAccessPremiumLive ? 'Join premium private stream (code 1234)' : 'Upgrade to premium plan to access private streams'}
+              >
+                <Video className="w-4 h-4" />
+                {joiningPremium ? 'Joining Premium…' : 'Join Premium Live'}
+              </button>
+            </>
+          ) : isAdmin ? (
+            <span className="text-xs text-indigo-700 dark:text-indigo-300 font-semibold">Admins can request/approve live video with minors here.</span>
+          ) : (
+            <span className="text-xs text-rose-700 dark:text-rose-300 font-semibold">Live video is only available for adults (18+). Please contact an admin for supervised sessions.</span>
+          )}
         </div>
       </header>
 
@@ -175,5 +197,5 @@ export default function LiveHomePage() {
         )}
       </main>
     </div>
-  )
+  );
 }

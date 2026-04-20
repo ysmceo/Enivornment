@@ -24,11 +24,8 @@ const generalLimiter = createLimiter(
 );
 
 // ─── Authentication endpoints (stricter to prevent brute-force) ───────────
-const authLimiter = createLimiter(
-  15 * 60 * 1000, // 15 minutes
-  isDev ? 120 : 10,
-  'Too many authentication attempts. Please try again in 15 minutes.'
-);
+// Auth limiter disabled for seamless login experience
+const authLimiter = (req, res, next) => next();
 
 // ─── File upload endpoints ─────────────────────────────────────────────────
 const uploadLimiter = createLimiter(

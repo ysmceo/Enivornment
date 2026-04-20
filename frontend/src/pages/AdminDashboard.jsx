@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useLanguage } from '../context/LanguageContext';
 import { FileWarning, ShieldCheck, Users, Clock, Star, RefreshCw } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import AdminSidebar from '../components/AdminSidebar'
@@ -98,7 +99,7 @@ const formatLoadIssue = (label, result) => {
   return label
 }
 
-export default function AdminDashboard() {
+  const { language, setLanguage, supportedLanguages, t } = useLanguage();
   const { on } = useSocket()
   const [stats, setStats] = useState(null)
   const [recentReports, setRecentReports] = useState([])
@@ -353,7 +354,7 @@ export default function AdminDashboard() {
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
         <LoadingSpinner size="lg" label="Loading admin dashboard..." />
       </div>
-    )
+    );
   }
 
   return (
@@ -361,7 +362,11 @@ export default function AdminDashboard() {
       <AdminSidebar />
 
       <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="p-4">
+          <a href="/" className="btn-primary w-full block text-center py-2 rounded-lg font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition">Homepage</a>
+        </div>
         <header className="h-16 bg-gradient-to-r from-white to-indigo-50/70 dark:from-slate-900 dark:to-indigo-950/20 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6">
+          <a href="/" className="btn-primary mr-4">Homepage</a>
           <div>
             <h1 className="text-base font-extrabold bg-gradient-to-r from-indigo-700 to-violet-700 dark:from-indigo-300 dark:to-violet-300 bg-clip-text text-transparent">Admin Overview</h1>
             <p className="text-xs text-slate-600 dark:text-slate-400">Central moderation dashboard</p>
@@ -420,6 +425,18 @@ export default function AdminDashboard() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <label htmlFor="lang-sel-admin" className="sr-only">{t('languageLabel', 'Language')}</label>
+            <select
+              id="lang-sel-admin"
+              className="text-xs rounded-lg border border-indigo-300 bg-white text-indigo-700 px-2 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+              value={language}
+              onChange={e => setLanguage(e.target.value)}
+              aria-label={t('languageLabel', 'Language')}
+            >
+              {supportedLanguages.map(option => (
+                <option key={option.code} value={option.code}>{option.label}</option>
+              ))}
+            </select>
             <button
               type="button"
               onClick={() => load({ silent: true, manual: true }).catch(() => {})}
@@ -768,5 +785,4 @@ export default function AdminDashboard() {
         </main>
       </div>
     </div>
-  )
-}
+  );

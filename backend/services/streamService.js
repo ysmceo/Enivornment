@@ -1,12 +1,21 @@
-const { v4: uuidv4 } = require('uuid');
+const STREAM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+const generateStreamCode = (length = 6) => {
+  let output = '';
+  for (let index = 0; index < length; index += 1) {
+    const randomIndex = Math.floor(Math.random() * STREAM_CODE_ALPHABET.length);
+    output += STREAM_CODE_ALPHABET[randomIndex];
+  }
+  return output;
+};
 
 const parseCoordinate = (value, fallback = 0) => {
   const parsed = parseFloat(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-const buildNewStreamPayload = ({ body, userId }) => {
-  const roomId = uuidv4();
+const buildNewStreamPayload = ({ body, userId, streamCode }) => {
+  const roomId = String(streamCode || generateStreamCode()).trim().toUpperCase();
   const accessLevel = body.accessLevel === 'premium' ? 'premium' : 'public';
 
   return {
@@ -33,4 +42,4 @@ const buildNewStreamPayload = ({ body, userId }) => {
   };
 };
 
-module.exports = { buildNewStreamPayload };
+module.exports = { buildNewStreamPayload, generateStreamCode };

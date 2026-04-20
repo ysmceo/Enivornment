@@ -9,7 +9,7 @@ const { recordAuditLog } = require('../services/auditService');
 const { queueNotification } = require('../services/notificationService');
 const { upsertLawEnforcementCase } = require('../services/lawEnforcementService');
 
-const getPremiumStreamCode = () => String(process.env.PREMIUM_STREAM_CODE || '2026').trim();
+const getPremiumStreamCode = () => String(process.env.PREMIUM_STREAM_CODE || '1234').trim();
 
 const getReadableStatus = (status) => {
   if (status === 'in_progress') return 'in progress';

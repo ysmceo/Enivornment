@@ -1,3 +1,4 @@
+
 import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -41,6 +42,7 @@ const NewsCategoryPage = lazyWithReload(() => import('./pages/NewsCategoryPage.j
 const NewsReaderPage = lazyWithReload(() => import('./pages/NewsReaderPage.jsx'))
 const SOSPage = lazyWithReload(() => import('./pages/SOSPage.jsx'))
 const CrimeAnalytics = lazyWithReload(() => import('./pages/CrimeAnalytics.jsx'))
+const Translator = lazyWithReload(() => import('./pages/Translator'))
 
 const RouteFallback = () => (
   <main className="max-w-5xl mx-auto p-6">

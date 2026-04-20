@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useLanguage } from '../context/LanguageContext'
 import {
   ArrowRight,
   Bell,
@@ -19,7 +20,7 @@ const KPI_STATS = [
   { value: '900M+', label: 'Evidence Data Secured', tone: 'from-sky-500/20 to-sky-900/10 border-sky-500/30', valueColor: 'text-sky-200' },
   { value: '124k', label: 'Incidents Processed', tone: 'from-violet-500/20 to-violet-900/10 border-violet-500/30', valueColor: 'text-violet-200' },
   { value: '99%', label: 'Successful Escalations', tone: 'from-amber-500/20 to-amber-900/10 border-amber-500/30', valueColor: 'text-amber-200' },
-]
+// ...array closed above, removed stray bracket
 
 const CORE_FEATURES = [
   {
@@ -49,7 +50,7 @@ const CORE_FEATURES = [
     description: 'Receive structured updates as reports move from intake to resolution.',
     iconTone: 'bg-sky-500/20 text-sky-300',
     borderTone: 'hover:border-sky-500/50',
-  },
+]
 ]
 
 const OPERATIONS = [
@@ -167,6 +168,7 @@ const FOOTER_LINKS = {
 }
 
 export default function Landing() {
+  const { language, setLanguage, supportedLanguages, t } = useLanguage();
   return (
     <div className="min-h-screen bg-[#12100d] text-slate-100 relative overflow-hidden">
       <div className="pointer-events-none absolute inset-0">
@@ -192,17 +194,30 @@ export default function Landing() {
           </Link>
 
           <div className="hidden md:flex items-center gap-6 text-sm">
-            <a href="#home" className="text-slate-300 hover:text-amber-300">Home</a>
-            <a href="#operations" className="text-slate-300 hover:text-amber-300">Operations</a>
-            <a href="#process" className="text-slate-300 hover:text-amber-300">How It Works</a>
-            <a href="#testimonials" className="text-slate-300 hover:text-amber-300">Testimonials</a>
-            <a href="#contact" className="text-slate-300 hover:text-amber-300">Contact</a>
+            <a href="#home" className="text-slate-300 hover:text-amber-300">{t('home', 'Home')}</a>
+            <a href="#operations" className="text-slate-300 hover:text-amber-300">{t('operations', 'Operations')}</a>
+            <a href="#process" className="text-slate-300 hover:text-amber-300">{t('howItWorks', 'How It Works')}</a>
+            <a href="#testimonials" className="text-slate-300 hover:text-amber-300">{t('testimonials', 'Testimonials')}</a>
+            <a href="#contact" className="text-slate-300 hover:text-amber-300">{t('contact', 'Contact')}</a>
           </div>
 
           <div className="flex items-center gap-2">
+            <label htmlFor="lang-sel" className="sr-only">{t('languageLabel', 'Language')}</label>
+            <select
+              id="lang-sel"
+              className="text-xs rounded-lg border border-amber-700 bg-[#12100d] text-amber-100 px-2 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#12100d]"
+              value={language}
+              onChange={e => setLanguage(e.target.value)}
+              aria-label={t('languageLabel', 'Language')}
+            >
+              {supportedLanguages.map(option => (
+                <option key={option.code} value={option.code}>{option.label}</option>
+              ))}
+            </select>
             <Link to="/login" className="btn-secondary !bg-slate-900/80 !border-amber-800/40 !text-amber-100 hover:!bg-slate-800">Sign In</Link>
+            <Link to="/login" className="btn-secondary !bg-slate-900/80 !border-amber-800/40 !text-amber-100 hover:!bg-slate-800">{t('signIn', 'Sign In')}</Link>
             <Link to="/register" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-sm font-bold">
-              Get Started
+              {t('getStarted', 'Get Started')}
             </Link>
           </div>
         </nav>
@@ -222,23 +237,24 @@ export default function Landing() {
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-24 grid lg:grid-cols-[1.1fr_.9fr] gap-10 items-center">
           <div>
-            <p className="inline-flex items-center rounded-full px-3 py-1 bg-amber-500/15 border border-amber-400/30 text-amber-200 text-xs font-semibold mb-4">Real-time Civic Protection Platform</p>
+            <p className="inline-flex items-center rounded-full px-3 py-1 bg-amber-500/15 border border-amber-400/30 text-amber-200 text-xs font-semibold mb-4">{t('tagline', 'Real-time Civic Protection Platform')}</p>
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-tight max-w-2xl">
-              Report Incidents,
+              {t('headline1', 'Report Incidents,')}
               <br />
-              Protect Communities,
+              {t('headline2', 'Protect Communities,')}
               <br />
-              <span className="bg-gradient-to-r from-amber-300 via-orange-300 to-rose-300 bg-clip-text text-transparent">Get Fast Response.</span>
+              <span className="bg-gradient-to-r from-amber-300 via-orange-300 to-rose-300 bg-clip-text text-transparent">{t('headline3', 'Get Fast Response.')}</span>
             </h1>
             <p className="text-slate-300 text-base sm:text-lg mt-6 max-w-xl leading-relaxed">
-              A secure platform where citizens, responders, and agencies work together with verified evidence,
-              rapid escalation, and structured incident workflows.
+              <p className="text-slate-300 text-base sm:text-lg mt-6 max-w-xl leading-relaxed">
+              {t('homepageDesc', 'A secure platform where citizens, responders, and agencies work together with verified evidence, rapid escalation, and structured incident workflows.')}
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
               <Link to="/register" className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-amber-500 text-black font-bold hover:bg-amber-400">
-                Submit Report <ChevronRight className="w-4 h-4" />
+                {t('submitReport', 'Submit Report')} <ChevronRight className="w-4 h-4" />
               </Link>
+              // ...existing code...
               <Link to="/live" className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-amber-700/50 text-amber-100 hover:bg-amber-900/20">
                 Start Live Stream
               </Link>

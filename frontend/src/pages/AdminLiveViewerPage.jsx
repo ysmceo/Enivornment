@@ -12,7 +12,7 @@ export default function AdminLiveViewerPage() {
   const [joiningPremium, setJoiningPremium] = useState(false)
   const [joinError, setJoinError] = useState('')
 
-  const premiumCode = String(import.meta.env.VITE_PREMIUM_STREAM_CODE || '2026').trim()
+  const premiumCode = String(import.meta.env.VITE_PREMIUM_STREAM_CODE || '1234').trim()
   const accessCode = String(searchParams.get('code') || '').trim()
 
   const joinLatestStream = async () => {
@@ -71,7 +71,7 @@ export default function AdminLiveViewerPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link to="/live/start" className="btn-primary text-sm">Start Live Stream</Link>
-          <Link to="/live/start?premium=1" className="btn-secondary text-sm">Start Premium Live (Code 2026)</Link>
+          <Link to="/live/start?premium=1" className="btn-secondary text-sm">Start Premium Live (Code 1234)</Link>
           <button
             type="button"
             className={`btn-secondary text-sm ${joiningLatest ? 'opacity-70 cursor-not-allowed' : ''}`}

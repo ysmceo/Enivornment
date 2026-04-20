@@ -10,7 +10,7 @@ export default function LiveStartPage() {
   const [error, setError] = useState('')
 
   const premiumMode = searchParams.get('premium') === '1'
-  const premiumCode = String(import.meta.env.VITE_PREMIUM_STREAM_CODE || '2026').trim()
+  const premiumCode = String(import.meta.env.VITE_PREMIUM_STREAM_CODE || '1234').trim()
 
   useEffect(() => {
     let active = true

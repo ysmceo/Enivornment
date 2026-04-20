@@ -45,21 +45,21 @@ export default function Navbar() {
   const navLinks = user
     ? isAdmin
       ? [
-          { to: '/admin',              label: 'Dashboard' },
-          { to: '/admin/reports',      label: 'Reports' },
-          { to: '/admin/users',        label: 'Users' },
-          { to: '/admin/verification', label: 'ID Verify' },
+          { to: '/admin',              label: t('dashboard', 'Dashboard') },
+          { to: '/admin/reports',      label: t('reports', 'Reports') },
+          { to: '/admin/users',        label: t('users', 'Users') },
+          { to: '/admin/verification', label: t('idVerify', 'ID Verify') },
         ]
       : [
-          { to: '/dashboard',   label: 'Dashboard' },
-          { to: '/cases/track', label: 'Track Cases' },
-          { to: '/submit',      label: 'Submit Report' },
-          { to: '/live',        label: 'Live Stream' },
+          { to: '/dashboard',   label: t('dashboard', 'Dashboard') },
+          { to: '/cases/track', label: t('trackCases', 'Track Cases') },
+          { to: '/submit',      label: t('submitReport', 'Submit Report') },
+          { to: '/live',        label: t('liveStream', 'Live Stream') },
         ]
     : [
-        { to: '/',         label: 'Home' },
-        { to: '/login',    label: 'Login' },
-        { to: '/register', label: 'Register' },
+        { to: '/',         label: t('home', 'Home') },
+        { to: '/login',    label: t('login', 'Login') },
+        { to: '/register', label: t('register', 'Register') },
       ];
 
   return (

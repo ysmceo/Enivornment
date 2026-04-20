@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import Accordion from '../components/Accordion'
 import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
@@ -232,111 +233,114 @@ export default function Register() {
             </div>
           </div>
 
-          <div className="rounded-lg border border-slate-700 bg-slate-900/70 p-3 space-y-2">
-            <p className="text-sm font-semibold text-slate-100">Select Plan</p>
-            <div className="grid sm:grid-cols-2 gap-2">
-              <label className={`rounded-lg border px-3 py-2 text-sm cursor-pointer ${form.selectedPlan === 'free' ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 text-slate-300'}`}>
-                <input
-                  type="radio"
-                  name="selectedPlan"
-                  className="mr-2"
-                  checked={form.selectedPlan === 'free'}
-                  onChange={() => setForm((p) => ({ ...p, selectedPlan: 'free' }))}
-                />
-                Free Plan (instant access)
-              </label>
-              <label className={`rounded-lg border px-3 py-2 text-sm cursor-pointer ${form.selectedPlan === 'premium' ? 'border-amber-500 bg-amber-500/10 text-amber-300' : 'border-slate-700 text-slate-300'}`}>
-                <input
-                  type="radio"
-                  name="selectedPlan"
-                  className="mr-2"
-                  checked={form.selectedPlan === 'premium'}
-                  onChange={() => setForm((p) => ({ ...p, selectedPlan: 'premium' }))}
-                />
-                Premium Plan (manual transfer + admin approval)
-              </label>
-            </div>
-
-            {form.selectedPlan === 'premium' && (
-              <div className="rounded-lg border border-amber-600/60 bg-amber-500/10 p-3 space-y-2">
-                <p className="text-xs text-amber-200 font-semibold">Transfer premium fee to this bank account:</p>
-                <p className="text-xs text-amber-100">
-                  Account Name: <span className="font-semibold">{premiumConfig?.bankAccount?.accountName || 'VOV Crime Premium'}</span><br />
-                  Account Number: <span className="font-semibold">{premiumConfig?.bankAccount?.accountNumber || '0000000000'}</span><br />
-                  Bank: <span className="font-semibold">{premiumConfig?.bankAccount?.bankName || 'Your Bank Name'}</span><br />
-                  Amount: <span className="font-semibold">₦{Number(premiumConfig?.amount || 5000).toLocaleString()}</span>
-                </p>
-
-                <div className="grid sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="label">Transfer Reference *</label>
+          {isAdult && (
+            <Accordion title="Select Plan (Adult Accounts Only)" defaultOpen>
+              <div className="rounded-lg border border-slate-700 bg-slate-900/70 p-3 space-y-2">
+                <div className="grid sm:grid-cols-2 gap-2">
+                  <label className={`rounded-lg border px-3 py-2 text-sm cursor-pointer ${form.selectedPlan === 'free' ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 text-slate-300'}`}>
                     <input
-                      className="input"
-                      value={form.premiumTransferReference}
-                      onChange={(e) => setForm((p) => ({ ...p, premiumTransferReference: e.target.value }))}
-                      placeholder="e.g. TRF-239482"
-                      required={form.selectedPlan === 'premium'}
+                      type="radio"
+                      name="selectedPlan"
+                      className="mr-2"
+                      checked={form.selectedPlan === 'free'}
+                      onChange={() => setForm((p) => ({ ...p, selectedPlan: 'free' }))}
                     />
-                  </div>
-                  <div>
-                    <label className="label">Amount Transferred (NGN)</label>
+                    Free Plan (instant access)
+                  </label>
+                  <label className={`rounded-lg border px-3 py-2 text-sm cursor-pointer ${form.selectedPlan === 'premium' ? 'border-amber-500 bg-amber-500/10 text-amber-300' : 'border-slate-700 text-slate-300'}`}>
                     <input
-                      className="input"
-                      type="number"
-                      min="0"
-                      value={form.premiumTransferAmount}
-                      onChange={(e) => setForm((p) => ({ ...p, premiumTransferAmount: e.target.value }))}
-                      placeholder="5000"
+                      type="radio"
+                      name="selectedPlan"
+                      className="mr-2"
+                      checked={form.selectedPlan === 'premium'}
+                      onChange={() => setForm((p) => ({ ...p, selectedPlan: 'premium' }))}
                     />
-                  </div>
+                    Premium Plan (manual transfer + admin approval)
+                  </label>
                 </div>
 
-                <div className="grid sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="label">Transfer Date</label>
-                    <input
-                      className="input"
-                      type="date"
-                      value={form.premiumTransferDate}
-                      onChange={(e) => setForm((p) => ({ ...p, premiumTransferDate: e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <label className="label">Sender Name</label>
-                    <input
-                      className="input"
-                      value={form.premiumTransferSenderName}
-                      onChange={(e) => setForm((p) => ({ ...p, premiumTransferSenderName: e.target.value }))}
-                      placeholder="Bank account sender"
-                    />
-                  </div>
-                </div>
+                {form.selectedPlan === 'premium' && (
+                  <div className="rounded-lg border border-amber-600/60 bg-amber-500/10 p-3 space-y-2 mt-3">
+                    <p className="text-xs text-amber-200 font-semibold">Transfer premium fee to this bank account:</p>
+                    <p className="text-xs text-amber-100">
+                      Account Name: <span className="font-semibold">{premiumConfig?.bankAccount?.accountName || 'VOV Crime Premium'}</span><br />
+                      Account Number: <span className="font-semibold">{premiumConfig?.bankAccount?.accountNumber || '0000000000'}</span><br />
+                      Bank: <span className="font-semibold">{premiumConfig?.bankAccount?.bankName || 'Your Bank Name'}</span><br />
+                      Amount: <span className="font-semibold">₦{Number(premiumConfig?.amount || 5000).toLocaleString()}</span>
+                    </p>
 
-                <div>
-                  <label className="label">Note (optional)</label>
-                  <textarea
-                    className="textarea"
-                    rows={2}
-                    value={form.premiumTransferNote}
-                    onChange={(e) => setForm((p) => ({ ...p, premiumTransferNote: e.target.value }))}
-                    placeholder="Any extra payment detail for admin verification"
-                  />
-                </div>
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="label">Transfer Reference *</label>
+                        <input
+                          className="input"
+                          value={form.premiumTransferReference}
+                          onChange={(e) => setForm((p) => ({ ...p, premiumTransferReference: e.target.value }))}
+                          placeholder="e.g. TRF-239482"
+                          required={form.selectedPlan === 'premium'}
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Amount Transferred (NGN)</label>
+                        <input
+                          className="input"
+                          type="number"
+                          min="0"
+                          value={form.premiumTransferAmount}
+                          onChange={(e) => setForm((p) => ({ ...p, premiumTransferAmount: e.target.value }))}
+                          placeholder="5000"
+                        />
+                      </div>
+                    </div>
 
-                <div>
-                  <label className="label">Payment Receipt Upload *</label>
-                  <input
-                    className="input"
-                    type="file"
-                    accept="image/*,.pdf"
-                    onChange={(e) => setPremiumReceiptFile(e.target.files?.[0] || null)}
-                    required={form.selectedPlan === 'premium'}
-                  />
-                  <p className="text-xs text-slate-400 mt-1">Upload transfer receipt (JPG, PNG, WEBP, or PDF). Max size: 5MB.</p>
-                </div>
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="label">Transfer Date</label>
+                        <input
+                          className="input"
+                          type="date"
+                          value={form.premiumTransferDate}
+                          onChange={(e) => setForm((p) => ({ ...p, premiumTransferDate: e.target.value }))}
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Sender Name</label>
+                        <input
+                          className="input"
+                          value={form.premiumTransferSenderName}
+                          onChange={(e) => setForm((p) => ({ ...p, premiumTransferSenderName: e.target.value }))}
+                          placeholder="Bank account sender"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="label">Note (optional)</label>
+                      <textarea
+                        className="textarea"
+                        rows={2}
+                        value={form.premiumTransferNote}
+                        onChange={(e) => setForm((p) => ({ ...p, premiumTransferNote: e.target.value }))}
+                        placeholder="Any extra payment detail for admin verification"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="label">Payment Receipt Upload *</label>
+                      <input
+                        className="input"
+                        type="file"
+                        accept="image/*,.pdf"
+                        onChange={(e) => setPremiumReceiptFile(e.target.files?.[0] || null)}
+                        required={form.selectedPlan === 'premium'}
+                      />
+                      <p className="text-xs text-slate-400 mt-1">Upload transfer receipt (JPG, PNG, WEBP, or PDF). Max size: 5MB.</p>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </Accordion>
+          )}
 
           <div className="grid sm:grid-cols-2 gap-3">
             <div>

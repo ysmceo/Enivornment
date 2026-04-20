@@ -1,9 +1,9 @@
 const Stream = require('../models/Stream');
 const User = require('../models/User');
-const { buildNewStreamPayload } = require('../services/streamService');
+const { buildNewStreamPayload, generateStreamCode } = require('../services/streamService');
 const { resolveIsAdult, hasPremiumAccess } = require('../middleware/auth');
 
-const getPremiumStreamCode = () => String(process.env.PREMIUM_STREAM_CODE || '2026').trim();
+const getPremiumStreamCode = () => String(process.env.PREMIUM_STREAM_CODE || '1234').trim();
 
 const isValidPremiumCode = (candidate) => {
   const expected = getPremiumStreamCode();
@@ -43,7 +43,26 @@ const startStream = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Identity verification is required before streaming.' });
     }
 
-    const { payload } = buildNewStreamPayload({ body: req.body, userId: req.user._id });
+    let payload = null;
+    let attempts = 0;
+
+    while (!payload && attempts < 8) {
+      const streamCode = generateStreamCode(6);
+      // eslint-disable-next-line no-await-in-loop
+      const exists = await Stream.exists({
+        $or: [{ streamId: streamCode }, { roomId: streamCode }],
+      });
+
+      if (!exists) {
+        ({ payload } = buildNewStreamPayload({ body: req.body, userId: req.user._id, streamCode }));
+      }
+
+      attempts += 1;
+    }
+
+    if (!payload) {
+      return res.status(500).json({ success: false, message: 'Unable to generate a unique stream code. Please try again.' });
+    }
 
     const stream = await Stream.create(payload);
 
